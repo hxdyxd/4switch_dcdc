@@ -7,10 +7,21 @@
 
 #include "hrtim.h"
 
-#define  H4SPWM_PERIOD         (4000)
-#define  H4SPWM_PERIOD_5PER    (H4SPWM_PERIOD/20)
-#define  H4SPWM_PERIOD_90PER    (H4SPWM_PERIOD - 2*H4SPWM_PERIOD/20)
-#define  H4SPWM_PERIOD_95PER    (H4SPWM_PERIOD - H4SPWM_PERIOD/20)
+
+#define  H4SPWM_PERIOD         (HT_PERIOD)
+
+//5%   95%   90%   185%
+//10%  90%   80%   170%
+#if 0
+    //5%
+    #define  H4SPWM_PERIOD_5PER    (H4SPWM_PERIOD/20)
+#else
+    //10%
+    #define  H4SPWM_PERIOD_5PER    (H4SPWM_PERIOD/10)
+#endif
+
+#define  H4SPWM_PERIOD_90PER    (H4SPWM_PERIOD - 2*H4SPWM_PERIOD_5PER)
+#define  H4SPWM_PERIOD_95PER    (H4SPWM_PERIOD - H4SPWM_PERIOD_5PER)
 #define  H4SPWM_PERIOD_185PER    (H4SPWM_PERIOD_90PER*2 + H4SPWM_PERIOD_5PER)
 
 
@@ -29,7 +40,7 @@ static inline void h4s_pwm_set_duty(uint8_t id, uint16_t duty);
   * @brief  SET BUCK-BOOST PWM DUTY
   * @retval None
   */
-static inline void h4s_buck_boost_pwm_set_duty(uint16_t duty);
+void h4s_buck_boost_pwm_set_duty(uint16_t duty);
 
 #endif
 /******************* (C) COPYRIGHT 2019 07 29 hxdyxd *****END OF FILE****/

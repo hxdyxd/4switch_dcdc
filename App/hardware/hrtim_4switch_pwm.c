@@ -18,8 +18,8 @@ void h4s_pwm_init(void)
     HAL_HRTIM_WaveformOutputStart(&hhrtim, HRTIM_OUTPUT_TB1 | HRTIM_OUTPUT_TB2);
     HAL_HRTIM_WaveformCountStart(&hhrtim, HRTIM_TIMERID_TIMER_B);
     
-    
-    h4s_buck_boost_pwm_set_duty(H4SPWM_PERIOD_185PER*2/3);
+    h4s_pwm_set_duty(2, H4SPWM_PERIOD/2);
+    h4s_buck_boost_pwm_set_duty(H4SPWM_PERIOD_95PER);
 }
 
 /**
@@ -44,7 +44,7 @@ static inline void h4s_pwm_set_duty(uint8_t id, uint16_t duty)
   * @brief  SET BUCK-BOOST PWM DUTY
   * @retval None
   */
-static inline void h4s_buck_boost_pwm_set_duty(uint16_t duty)
+void h4s_buck_boost_pwm_set_duty(uint16_t duty)
 {
     if(duty <= H4SPWM_PERIOD_5PER){
         /* duty <= 5% */

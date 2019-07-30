@@ -338,7 +338,7 @@
               <MiscControls></MiscControls>
               <Define>USE_HAL_DRIVER,STM32H750xx,USE_FULL_ASSERT,ARM_MATH_CM7,ARM_MATH_MATRIX_CHECK</Define>
               <Undefine></Undefine>
-              <IncludePath>../Inc;    ../Drivers/STM32H7xx_HAL_Driver/Inc;    ../Drivers/STM32H7xx_HAL_Driver/Inc/Legacy;    ../Drivers/CMSIS/Device/ST/STM32H7xx/Include;    ../Drivers/CMSIS/Include;    ..\App;    ..\App\hal;    ..\App\hardware;    ..\App\rom;    ..\Drivers\CMSIS\DSP\Include</IncludePath>
+              <IncludePath>../Inc;           ../Drivers/STM32H7xx_HAL_Driver/Inc;           ../Drivers/STM32H7xx_HAL_Driver/Inc/Legacy;           ../Drivers/CMSIS/Device/ST/STM32H7xx/Include;           ../Drivers/CMSIS/Include;           ..\App;           ..\App\hal;           ..\App\hardware;           ..\App\rom;           ..\Drivers\CMSIS\DSP\Include</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -636,6 +636,21 @@
               <FileName>tts.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\App\rom\tts.c</FilePath>
+            </File>
+            <File>
+              <FileName>adc_algorithm.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\App\adc_algorithm.c</FilePath>
+            </File>
+            <File>
+              <FileName>soft_timer.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\App\soft_timer.c</FilePath>
+            </File>
+            <File>
+              <FileName>mat_algorithm.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\App\mat_algorithm.c</FilePath>
             </File>
           </Files>
         </Group>

@@ -22,8 +22,10 @@
 #define ADC_DUAL_BUFFER      (1)
 
 /* ADC */
+#define ADC_16BIT_VOLTAGE_GET(v)    ((v)*3.0/0x10000)
+
 #define ADC1_CONV_NUMBER      (50)
-#define ADC1_CHANNEL_NUMBER   (2)
+#define ADC1_CHANNEL_NUMBER   (3)
 #define ADC1_BUFFER_SIZE     (ADC1_CONV_NUMBER*ADC1_CHANNEL_NUMBER*ADC_DUAL_BUFFER)
 
 #define ADC3_CONV_NUMBER      (50)
