@@ -11,6 +11,7 @@
 
 #define SOFT_TIMER_LED_DEBUG_ID        (0)
 #define SOFT_TIMER_LOW_VIN_ID          (1)
+#define SOFT_TIMER_UGUI_ID             (2)
 
 
 #define GET_VOUT()         adc_real_value_array[0]

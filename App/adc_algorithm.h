@@ -25,11 +25,15 @@ typedef struct {
     float le;
     float se;
     float setval;
-    int16_t output;
+    float output;
+    uint16_t i_max;
     int16_t max_output;
     int16_t min_output;
 }pidc_t;
 
+
+//Linear regression
+#define  EASY_LR(x,x1,y1,x2,y2)                (((y2) - (y1))/((x2) - (x1))*((x) - (x1)) + (y1))
 
 
 /*******************************************************************************
@@ -104,7 +108,7 @@ void pid_set_value(pidc_t *pid, float setval);
 * Output         : None.
 * Return         : None.
 *******************************************************************************/
-int16_t pid_ctrl(pidc_t *pid, float curval);
+float pid_ctrl(pidc_t *pid, float curval);
 
 
 /*******************************************************************************

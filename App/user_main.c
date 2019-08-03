@@ -11,6 +11,7 @@
 #include <arm_math.h>
 #include "adc_algorithm.h"
 #include "soft_timer.h"
+#include "lcd_manager.h"
 
 
 uint16_t adc_val[ADC1_CHANNEL_NUMBER];
@@ -20,15 +21,16 @@ static uint16_t maxadc_v[ADC1_CHANNEL_NUMBER] = {0, };
 static uint16_t minadc_v[ADC1_CHANNEL_NUMBER] = {0xffff, };
 
 static pidc_t pid_ch1 = {
-    .kp = 25,
-    .ki = 0,
-    .kd = 10,
+    .kp = 0.4,
+    .ki = 0.0,
+    .kd = 0.1,
+    .i_max = 0,
 };
 
 static uint8_t u8_mode_set = MODE_CH1;
 static uint8_t low_vin = 0;
 
-static float vout_set_val = 16.0;
+static float vout_set_val = 12.0;
 
 static int ctrl_counter = 0;
 
@@ -43,7 +45,7 @@ void user_system_setup(void)
 }
 
 
-#define  TTS_ON      (1)
+#define  TTS_ON      (0)
 
 static char tts_buf[512];
 
@@ -71,7 +73,7 @@ void tts_player(void)
     SWITCH_TASK_END(task1);
 }
 
-
+#if 0
 void low_vin_timeout_proc(void)
 {
     static float vout_set_step = 0;
@@ -79,37 +81,38 @@ void low_vin_timeout_proc(void)
     if(!low_vin)
         return;
     
-    if(GET_VIN() >= 3.0) {
+    if(GET_VIN() >= 3.0f) {
         low_vin++;
         vout_set_step += (vout_set_val - 0)/10;
         pid_set_value(&pid_ch1, vout_set_step);
         if(vout_set_step < vout_set_val) {
             APP_WARN("set vout = %.3f\r\n", vout_set_step);
-            soft_timer_create(SOFT_TIMER_LOW_VIN_ID, 1, 0, low_vin_timeout_proc, 200);
+            soft_timer_create(SOFT_TIMER_LOW_VIN_ID, 1, 0, low_vin_timeout_proc, 400);
         } else {
             APP_WARN("set vout = %.3f, low vin exit!\r\n", vout_set_step);
             low_vin = 0;
         }
     } else {
         vout_set_step = 0;
+        pid_set_value(&pid_ch1, vout_set_step);
         APP_WARN("low vin wait\r\n");
         soft_timer_create(SOFT_TIMER_LOW_VIN_ID, 1, 0, low_vin_timeout_proc, 200);
     }
 }
-
+#endif
 
 void pid_ch1_control_proc(void)
 {
     float vvvvv = GET_VOUT();
-    int16_t ctrl_duty = pid_ctrl(&pid_ch1, vvvvv );
+    uint16_t ctrl_duty = pid_ctrl(&pid_ch1, vvvvv );
     
     //Ç·Ñ¹±£»¤
-    if(GET_VIN() < 2.0) {
-        if(!low_vin) {
-            low_vin = 1;
-            soft_timer_create(SOFT_TIMER_LOW_VIN_ID, 1, 0, low_vin_timeout_proc, 200);
-        }
-        ctrl_duty = pid_ch1.output = H4SPWM_PERIOD_95PER;
+    if(GET_VIN() < 2.0f) {
+//        if(!low_vin) {
+//            low_vin = 1;
+//            soft_timer_create(SOFT_TIMER_LOW_VIN_ID, 1, 0, low_vin_timeout_proc, 200);
+//        }
+        ctrl_duty = pid_ch1.output = H4SPWM_PERIOD_5PER;
     }
     
     
@@ -130,7 +133,7 @@ void adc3_receive_proc(int id, void *pbuf, int len)
     
     
     if(id == 1) {
-        TIMER_TASK(timer0, 3, 1) {
+        /*TIMER_TASK(timer0, 1, 1)*/ {
             for(int i=0; i<ADC1_CHANNEL_NUMBER; i++) {
                 adc_val[i] = No_Max_Min_Filter(adc_data, ADC1_CONV_NUMBER, ADC1_CHANNEL_NUMBER, i);
                 if(adc_val[i] > maxadc_v[i]) {
@@ -162,15 +165,49 @@ void adc3_receive_proc(int id, void *pbuf, int len)
                     s16_cur_duty_max,
                     s16_cur_duty_max*100.0/H4SPWM_PERIOD_185PER
                 );
+                lcd_printf("ctl= %d cnt/s\n", ctrl_counter);
+                
                 ctrl_counter = 0;
                 s16_cur_duty_max = 0;
                 s16_cur_duty_min = MAX_OUTPUT_DUTY;
+            }
+            
+            TIMER_TASK(timer2, 10, 1) {
+                static uint8_t buffer_wave_1[240];
+                static uint8_t buffer_wave_2[240];
+                static struct lcd_wave_t gwav1, gwav2;
+                static struct lcd_wave_t *gwavs[2] = {
+                    &gwav1, &gwav2, 
+                };
+                
+                INIT_TASK(init0) {
+                    gui_wave_init(&gwav1, 0, 0, 240, 120, buffer_wave_1, C_BLACK);
+                    gui_wave_init(&gwav2, 0, 0, 240, 120, buffer_wave_2, C_BLACK);
+                }
+                
+                //gui_wave_set(&gwav1, EASY_LR(GET_VIN(), 0, 0, 30, 120), C_BLUE);
+                gui_wave_set(&gwav1, EASY_LR(pid_ch1.output, H4SPWM_PERIOD_5PER, 0, H4SPWM_PERIOD_185PER, 120.0), C_MAGENTA);
+                
+                gui_wave_set(&gwav2, EASY_LR(GET_VOUT(), 0, 0, 30, 120), C_ORANGE);
+                
+                
+                static float slow_vout;
+                TIMER_TASK(timer2_0, 200, 1) {
+                    slow_vout = GET_VOUT();
+                }
+                
+                TIMER_TASK(timer2_1, 50, 1) {
+                    gui_wave_draw(gwavs, 2);
+                    ug_printf(0, 0, C_MAGENTA, "Duty %.1f%%", pid_ch1.output*100.0/H4SPWM_PERIOD_185PER);
+                    ug_printf(0, 14, C_ORANGE, "VOUT %.3fV", slow_vout);
+                }
+                
             }
         }
     }
     
     if(id == 3) {
-        TIMER_TASK(timer2, 1000, 1) {
+        TIMER_TASK(timer3, 1000, 1) {
 
             float Vtemp_sensor;
             uint16_t TS_CAL1;
@@ -199,17 +236,42 @@ void adc3_receive_proc(int id, void *pbuf, int len)
 }
 
 
+uint32_t fps_inc = 0;
+
 void led_debug_proc(void)
 {
+    
     LED_REV(LED0_BASE);
     tts_player();
+    
+
+    static uint16_t color_buf[4] = {RED, GREEN, BLUE, YELLOW};
+    static uint16_t i = 0;
+    i = (i+1) % 4;
+    
+    
+    if(i&1)
+        UG_TouchUpdate(15, 60, TOUCH_STATE_PRESSED );
+    else
+        UG_TouchUpdate(-1, -1, TOUCH_STATE_RELEASED );
+    
+    
+    lcd_printf("VIN %.3fV, VOUT %.3fV\n", GET_VIN(), GET_VOUT());
+    
+    TIMER_TASK(timer0, 1000, 1) {
+        static uint32_t last_timer = 0;
+        lcd_printf("fps: %d\n", fps_inc*1000/(hal_read_TickCounter() - last_timer) );
+        fps_inc = 0;
+        last_timer = hal_read_TickCounter();
+    }
+    
+//    UG_FillScreen( color_buf[i] );
 }
 
 
 void user_setup(void)
 {
     PRINTF("\r\n\r\n[H7] Build , %s %s \r\n", __DATE__, __TIME__);
-    
     data_interface_hal_init();
     
     param_default_value_init();
@@ -219,19 +281,28 @@ void user_setup(void)
     
     soft_timer_init();
     
-    soft_timer_create(0, 1, 1, led_debug_proc,200);
-
+    soft_timer_create(SOFT_TIMER_LED_DEBUG_ID, 1, 1, led_debug_proc, 200);
+    soft_timer_create(SOFT_TIMER_UGUI_ID, 1, 1, UG_Update, 20);
+    
+    gui_init();
+    gui_window_init();
+    
+    
 #if TTS_ON
     tts_init();
 #endif
 }
 
 
-
-
 void user_loop(void)
 {
     soft_timer_proc();
+    
+    TIMER_TASK(time0, 33, 1) {
+        if(lcd240x240_flush() >= 0) {
+            fps_inc++;
+        }
+    }
 
 #if TTS_ON
     TIMER_TASK(time3, 50, 1) {

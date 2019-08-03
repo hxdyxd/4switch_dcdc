@@ -117,13 +117,18 @@ void pid_set_value(pidc_t *pid, float setval)
     pid->setval = setval;
 }
 
-int16_t pid_ctrl(pidc_t *pid, float curval)
+float pid_ctrl(pidc_t *pid, float curval)
 {
     float e = pid->setval - curval;  //p
     float de = e - pid->le;  //d
     pid->le = e;
     pid->se += e;  //i
-
+    
+    if(pid->se > pid->i_max) {
+        pid->se = pid->i_max;
+    } else if(pid->se < -pid->i_max) {
+        pid->se = -pid->i_max;
+    }
     
     pid->output += (e * pid->kp) + (pid->se * pid->ki) + (de * pid->kd);
     

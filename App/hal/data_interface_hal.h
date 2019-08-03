@@ -15,16 +15,17 @@
 #include "adc.h"
 #include "dac.h"
 #include "tim.h"
+#include "spi.h"
 #include "hrtim_4switch_pwm.h"
 #include "qspi_flash.h"
-
+#include "lcd240x240.h"
 
 #define ADC_DUAL_BUFFER      (1)
 
 /* ADC */
 #define ADC_16BIT_VOLTAGE_GET(v)    ((v)*3.0/0x10000)
 
-#define ADC1_CONV_NUMBER      (50)
+#define ADC1_CONV_NUMBER      (10)
 #define ADC1_CHANNEL_NUMBER   (3)
 #define ADC1_BUFFER_SIZE     (ADC1_CONV_NUMBER*ADC1_CHANNEL_NUMBER*ADC_DUAL_BUFFER)
 
@@ -45,8 +46,11 @@
 #define LED_LOW(id)   HAL_GPIO_WritePin(id, GPIO_PIN_RESET)
 #define LED_REV(id)  HAL_GPIO_TogglePin(id)
 
-#define LED0_BASE   GPIOC, GPIO_PIN_13
-
+#define LED0_BASE   BASE_LED_GPIO_Port , BASE_LED_Pin
+#define LCD_DC      LCD_DC_GPIO_Port   , LCD_DC_Pin
+#define LCD_RES     LCD_RES_GPIO_Port  , LCD_RES_Pin
+#define LCD_CLK     GPIOB  , GPIO_PIN_10
+#define LCD_MOSI    GPIOC  , GPIO_PIN_1
 
 /*******************************************************************************
 * Function Name  : data_interface_hal_init.

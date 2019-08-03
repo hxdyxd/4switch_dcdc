@@ -10,8 +10,8 @@
       <TargetName>h750_hello</TargetName>
       <ToolsetNumber>0x4</ToolsetNumber>
       <ToolsetName>ARM-ADS</ToolsetName>
-      <pCCUsed>6120000::V6.12::.\ARMCLANG</pCCUsed>
-      <uAC6>1</uAC6>
+      <pCCUsed>5060750::V5.06 update 6 (build 750)::ARMCC</pCCUsed>
+      <uAC6>0</uAC6>
       <TargetOption>
         <TargetCommonOption>
           <Device>STM32H750VBTx</Device>
@@ -54,7 +54,7 @@
           <CreateLib>0</CreateLib>
           <CreateHexFile>1</CreateHexFile>
           <DebugInformation>1</DebugInformation>
-          <BrowseInformation>1</BrowseInformation>
+          <BrowseInformation>0</BrowseInformation>
           <ListingPath></ListingPath>
           <HexFormatSelection>1</HexFormatSelection>
           <Merge32K>0</Merge32K>
@@ -312,7 +312,7 @@
           </ArmAdsMisc>
           <Cads>
             <interw>1</interw>
-            <Optim>7</Optim>
+            <Optim>4</Optim>
             <oTime>0</oTime>
             <SplitLS>0</SplitLS>
             <OneElfS>1</OneElfS>
@@ -321,7 +321,7 @@
             <PlainCh>0</PlainCh>
             <Ropi>0</Ropi>
             <Rwpi>0</Rwpi>
-            <wLevel>3</wLevel>
+            <wLevel>2</wLevel>
             <uThumb>0</uThumb>
             <uSurpInc>0</uSurpInc>
             <uC99>1</uC99>
@@ -336,9 +336,9 @@
             <v6Rtti>0</v6Rtti>
             <VariousControls>
               <MiscControls></MiscControls>
-              <Define>USE_HAL_DRIVER,STM32H750xx,USE_FULL_ASSERT,ARM_MATH_CM7,ARM_MATH_MATRIX_CHECK</Define>
+              <Define>USE_HAL_DRIVER,STM32H750xx,USE_FULL_ASSERT,__ARM_PCS_VFP,__FPU_PRESENT=1,ARM_MATH_CM7,ARM_MATH_MATRIX_CHECK</Define>
               <Undefine></Undefine>
-              <IncludePath>../Inc;           ../Drivers/STM32H7xx_HAL_Driver/Inc;           ../Drivers/STM32H7xx_HAL_Driver/Inc/Legacy;           ../Drivers/CMSIS/Device/ST/STM32H7xx/Include;           ../Drivers/CMSIS/Include;           ..\App;           ..\App\hal;           ..\App\hardware;           ..\App\rom;           ..\Drivers\CMSIS\DSP\Include</IncludePath>
+              <IncludePath>../Inc;  ../Drivers/STM32H7xx_HAL_Driver/Inc;  ../Drivers/STM32H7xx_HAL_Driver/Inc/Legacy;  ../Drivers/CMSIS/Device/ST/STM32H7xx/Include;  ../Drivers/CMSIS/Include;  ..\App;  ..\App\hal;  ..\App\hardware;  ..\App\rom;  ..\Drivers\CMSIS\DSP\Include;  ..\App\lcd;  ..\App\lcd\UGUI;../Utilities/JPEG</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -433,9 +433,9 @@
               <FilePath>../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_hrtim.c</FilePath>
             </File>
             <File>
-              <FileName>stm32h7xx_hal_qspi.c</FileName>
+              <FileName>stm32h7xx_hal_jpeg.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_qspi.c</FilePath>
+              <FilePath>../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_jpeg.c</FilePath>
             </File>
             <File>
               <FileName>stm32h7xx_hal_tim.c</FileName>
@@ -446,6 +446,21 @@
               <FileName>stm32h7xx_hal_tim_ex.c</FileName>
               <FileType>1</FileType>
               <FilePath>../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_tim_ex.c</FilePath>
+            </File>
+            <File>
+              <FileName>stm32h7xx_hal_qspi.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_qspi.c</FilePath>
+            </File>
+            <File>
+              <FileName>stm32h7xx_hal_spi.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_spi.c</FilePath>
+            </File>
+            <File>
+              <FileName>stm32h7xx_hal_spi_ex.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_spi_ex.c</FilePath>
             </File>
             <File>
               <FileName>stm32h7xx_hal_uart.c</FileName>
@@ -573,9 +588,24 @@
               <FilePath>../Src/hrtim.c</FilePath>
             </File>
             <File>
+              <FileName>jpeg.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../Src/jpeg.c</FilePath>
+            </File>
+            <File>
+              <FileName>pwr.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../Src/pwr.c</FilePath>
+            </File>
+            <File>
               <FileName>quadspi.c</FileName>
               <FileType>1</FileType>
               <FilePath>../Src/quadspi.c</FilePath>
+            </File>
+            <File>
+              <FileName>spi.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../Src/spi.c</FilePath>
             </File>
             <File>
               <FileName>tim.c</FileName>
@@ -756,6 +786,11 @@
               <FileType>1</FileType>
               <FilePath>..\App\rom\pcm.c</FilePath>
             </File>
+            <File>
+              <FileName>bmp.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\App\lcd\bmp.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
@@ -901,6 +936,36 @@
               </Aads>
             </GroupArmAds>
           </GroupOption>
+        </Group>
+        <Group>
+          <GroupName>DISPLAY</GroupName>
+          <Files>
+            <File>
+              <FileName>lcd240x240.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\App\lcd\lcd240x240.c</FilePath>
+            </File>
+            <File>
+              <FileName>ugui.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\App\lcd\UGUI\ugui.c</FilePath>
+            </File>
+            <File>
+              <FileName>lcd_manager.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\App\lcd\lcd_manager.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>Utilities</GroupName>
+          <Files>
+            <File>
+              <FileName>jpeg_utils.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../Utilities/JPEG/jpeg_utils.c</FilePath>
+            </File>
+          </Files>
         </Group>
         <Group>
           <GroupName>::CMSIS</GroupName>

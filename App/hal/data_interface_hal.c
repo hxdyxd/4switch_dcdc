@@ -149,6 +149,9 @@ void data_interface_hal_init(void)
     HAL_TIM_Base_Start(&htim3);  //adc timer
     
     h4s_pwm_init();
+    
+    lcd240x240_init();
+    lcd240x240_clear(0xffff);
 }
 
 

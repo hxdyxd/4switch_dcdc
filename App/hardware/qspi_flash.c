@@ -320,7 +320,6 @@ uint32_t qspi_flash_device_id_by_qspi(void)
 uint32_t qspi_flash_4k_sector_erase(uint32_t address)
 {
     QSPI_CommandTypeDef s_command;
-    uint32_t ch;
     qspi_flash_write_enable(1);
     qspi_flash_wait_for_write();
     

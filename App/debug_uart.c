@@ -3,6 +3,9 @@
 
 #include <stdio.h>
 #include "usart.h"
+#include "ugui.h"
+
+
 
 int fputc(int ch, FILE *f)
 {
@@ -17,4 +20,3 @@ int fgetc(FILE *f)
     while( HAL_UART_Receive(&huart1, &c, 1, 600) != HAL_OK);
     return c;
 }
-
