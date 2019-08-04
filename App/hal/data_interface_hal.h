@@ -18,20 +18,8 @@
 #include "spi.h"
 #include "hrtim_4switch_pwm.h"
 #include "qspi_flash.h"
+#include "hal32_adc.h"
 #include "lcd240x240.h"
-
-#define ADC_DUAL_BUFFER      (1)
-
-/* ADC */
-#define ADC_16BIT_VOLTAGE_GET(v)    ((v)*3.0/0x10000)
-
-#define ADC1_CONV_NUMBER      (10)
-#define ADC1_CHANNEL_NUMBER   (3)
-#define ADC1_BUFFER_SIZE     (ADC1_CONV_NUMBER*ADC1_CHANNEL_NUMBER*ADC_DUAL_BUFFER)
-
-#define ADC3_CONV_NUMBER      (50)
-#define ADC3_CHANNEL_NUMBER   (1)
-#define ADC3_BUFFER_SIZE     (ADC3_CONV_NUMBER*ADC3_CHANNEL_NUMBER*ADC_DUAL_BUFFER)
 
 
 //UART
@@ -60,16 +48,6 @@
 * Return         : None.
 *******************************************************************************/
 void data_interface_hal_init(void);
-
-
-/*******************************************************************************
-* Function Name  : adc_rx_proc.
-* Description    : Hardware adaptation layer adc initialization.
-* Input          : None.
-* Output         : None.
-* Return         : None.
-*******************************************************************************/
-void adc_rx_proc( void (*func_cb)(int id, void *, int len) );
 
 
 /*******************************************************************************

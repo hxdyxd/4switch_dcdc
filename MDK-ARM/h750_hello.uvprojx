@@ -338,7 +338,7 @@
               <MiscControls></MiscControls>
               <Define>USE_HAL_DRIVER,STM32H750xx,USE_FULL_ASSERT,__ARM_PCS_VFP,__FPU_PRESENT=1,ARM_MATH_CM7,ARM_MATH_MATRIX_CHECK</Define>
               <Undefine></Undefine>
-              <IncludePath>../Inc;  ../Drivers/STM32H7xx_HAL_Driver/Inc;  ../Drivers/STM32H7xx_HAL_Driver/Inc/Legacy;  ../Drivers/CMSIS/Device/ST/STM32H7xx/Include;  ../Drivers/CMSIS/Include;  ..\App;  ..\App\hal;  ..\App\hardware;  ..\App\rom;  ..\Drivers\CMSIS\DSP\Include;  ..\App\lcd;  ..\App\lcd\UGUI;../Utilities/JPEG</IncludePath>
+              <IncludePath>../Inc;       ../Drivers/STM32H7xx_HAL_Driver/Inc;       ../Drivers/STM32H7xx_HAL_Driver/Inc/Legacy;       ../Drivers/CMSIS/Device/ST/STM32H7xx/Include;       ../Drivers/CMSIS/Include;       ..\App;       ..\App\hal;       ..\App\hardware;       ..\App\rom;       ..\Drivers\CMSIS\DSP\Include;       ..\App\lcd;       ..\App\lcd\UGUI;     ../Utilities/JPEG</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -550,6 +550,16 @@
           </Files>
         </Group>
         <Group>
+          <GroupName>Utilities</GroupName>
+          <Files>
+            <File>
+              <FileName>jpeg_utils.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../Utilities/JPEG/jpeg_utils.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
           <GroupName>Application/User</GroupName>
           <Files>
             <File>
@@ -640,6 +650,56 @@
           </Files>
         </Group>
         <Group>
+          <GroupName>hardware</GroupName>
+          <Files>
+            <File>
+              <FileName>qspi_flash.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\App\hardware\qspi_flash.c</FilePath>
+            </File>
+            <File>
+              <FileName>hrtim_4switch_pwm.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\App\hardware\hrtim_4switch_pwm.c</FilePath>
+            </File>
+            <File>
+              <FileName>hal32_adc.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\App\hardware\hal32_adc.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>hal</GroupName>
+          <Files>
+            <File>
+              <FileName>data_interface_hal.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\App\hal\data_interface_hal.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>DISPLAY</GroupName>
+          <Files>
+            <File>
+              <FileName>lcd240x240.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\App\lcd\lcd240x240.c</FilePath>
+            </File>
+            <File>
+              <FileName>ugui.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\App\lcd\UGUI\ugui.c</FilePath>
+            </File>
+            <File>
+              <FileName>lcd_manager.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\App\lcd\lcd_manager.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
           <GroupName>App</GroupName>
           <Files>
             <File>
@@ -681,31 +741,6 @@
               <FileName>mat_algorithm.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\App\mat_algorithm.c</FilePath>
-            </File>
-          </Files>
-        </Group>
-        <Group>
-          <GroupName>hal</GroupName>
-          <Files>
-            <File>
-              <FileName>data_interface_hal.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\App\hal\data_interface_hal.c</FilePath>
-            </File>
-          </Files>
-        </Group>
-        <Group>
-          <GroupName>hardware</GroupName>
-          <Files>
-            <File>
-              <FileName>qspi_flash.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\App\hardware\qspi_flash.c</FilePath>
-            </File>
-            <File>
-              <FileName>hrtim_4switch_pwm.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\App\hardware\hrtim_4switch_pwm.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -936,36 +971,6 @@
               </Aads>
             </GroupArmAds>
           </GroupOption>
-        </Group>
-        <Group>
-          <GroupName>DISPLAY</GroupName>
-          <Files>
-            <File>
-              <FileName>lcd240x240.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\App\lcd\lcd240x240.c</FilePath>
-            </File>
-            <File>
-              <FileName>ugui.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\App\lcd\UGUI\ugui.c</FilePath>
-            </File>
-            <File>
-              <FileName>lcd_manager.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\App\lcd\lcd_manager.c</FilePath>
-            </File>
-          </Files>
-        </Group>
-        <Group>
-          <GroupName>Utilities</GroupName>
-          <Files>
-            <File>
-              <FileName>jpeg_utils.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>../Utilities/JPEG/jpeg_utils.c</FilePath>
-            </File>
-          </Files>
         </Group>
         <Group>
           <GroupName>::CMSIS</GroupName>

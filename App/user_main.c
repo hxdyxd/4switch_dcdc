@@ -21,7 +21,7 @@ static uint16_t maxadc_v[ADC1_CHANNEL_NUMBER] = {0, };
 static uint16_t minadc_v[ADC1_CHANNEL_NUMBER] = {0xffff, };
 
 static pidc_t pid_ch1 = {
-    .kp = 0.4,
+    .kp = 1.2,
     .ki = 0.0,
     .kd = 0.1,
     .i_max = 0,
@@ -30,7 +30,7 @@ static pidc_t pid_ch1 = {
 static uint8_t u8_mode_set = MODE_CH1;
 static uint8_t low_vin = 0;
 
-static float vout_set_val = 12.0;
+static float vout_set_val = 16.0;
 
 static int ctrl_counter = 0;
 
@@ -47,7 +47,6 @@ void user_system_setup(void)
 
 #define  TTS_ON      (0)
 
-static char tts_buf[512];
 
 void tts_player(void)
 {
@@ -55,6 +54,7 @@ void tts_player(void)
     
     
 #if TTS_ON
+    static char tts_buf[512];
     SWITCH_TASK(task1) {
         int len = 0;
         if(low_vin) {
@@ -103,11 +103,11 @@ void low_vin_timeout_proc(void)
 
 void pid_ch1_control_proc(void)
 {
-    float vvvvv = GET_VOUT();
+    float vvvvv = GET_BVOUT();
     uint16_t ctrl_duty = pid_ctrl(&pid_ch1, vvvvv );
     
     //欠压保护
-    if(GET_VIN() < 2.0f) {
+    if(GET_PVIN() < 2.0f) {
 //        if(!low_vin) {
 //            low_vin = 1;
 //            soft_timer_create(SOFT_TIMER_LOW_VIN_ID, 1, 0, low_vin_timeout_proc, 200);
@@ -127,9 +127,23 @@ void pid_ch1_control_proc(void)
 
 
 
+
+
 void adc3_receive_proc(int id, void *pbuf, int len)
 {
     uint16_t *adc_data = (uint16_t *)pbuf;
+    
+    static uint8_t buffer_wave_1[240];
+    static uint8_t buffer_wave_2[240];
+    static struct lcd_wave_t gwav1, gwav2;
+    static struct lcd_wave_t *gwavs[2] = {
+        &gwav1, &gwav2, 
+    };
+    
+    INIT_TASK(init0) {
+        gui_wave_init(&gwav1, 0, 0, 240, 120, buffer_wave_1, C_BLACK);
+        gui_wave_init(&gwav2, 0, 0, 240, 120, buffer_wave_2, C_BLACK);
+    }
     
     
     if(id == 1) {
@@ -152,7 +166,7 @@ void adc3_receive_proc(int id, void *pbuf, int len)
                 for(int i=0; i<ADC1_CHANNEL_NUMBER; i++) {
                     PRINTF("[%s] = %d(dt:%d) %.3f V\r\n", value_adc_info(i), adc_val[i], maxadc_v[i] - minadc_v[i], ADC_16BIT_VOLTAGE_GET(adc_val[i]) );
                     
-                    PRINTF("%s: %.3fV \r\n", value_adc_info(i), adc_real_value_array[i]);
+                    PRINTF("%s: %.3f V/A \r\n", value_adc_info(i), adc_real_value_array[i]);
 
                     maxadc_v[i] = 0;
                     minadc_v[i] = 0xffff;
@@ -173,27 +187,16 @@ void adc3_receive_proc(int id, void *pbuf, int len)
             }
             
             TIMER_TASK(timer2, 10, 1) {
-                static uint8_t buffer_wave_1[240];
-                static uint8_t buffer_wave_2[240];
-                static struct lcd_wave_t gwav1, gwav2;
-                static struct lcd_wave_t *gwavs[2] = {
-                    &gwav1, &gwav2, 
-                };
-                
-                INIT_TASK(init0) {
-                    gui_wave_init(&gwav1, 0, 0, 240, 120, buffer_wave_1, C_BLACK);
-                    gui_wave_init(&gwav2, 0, 0, 240, 120, buffer_wave_2, C_BLACK);
-                }
                 
                 //gui_wave_set(&gwav1, EASY_LR(GET_VIN(), 0, 0, 30, 120), C_BLUE);
-                gui_wave_set(&gwav1, EASY_LR(pid_ch1.output, H4SPWM_PERIOD_5PER, 0, H4SPWM_PERIOD_185PER, 120.0), C_MAGENTA);
+                //gui_wave_set(&gwav1, EASY_LR(pid_ch1.output, H4SPWM_PERIOD_5PER, 0, H4SPWM_PERIOD_185PER, 120.0), C_MAGENTA);
                 
-                gui_wave_set(&gwav2, EASY_LR(GET_VOUT(), 0, 0, 30, 120), C_ORANGE);
+                gui_wave_set(&gwav2, EASY_LR(GET_BVOUT(), 0, 0, 30, 120), C_ORANGE);
                 
                 
                 static float slow_vout;
                 TIMER_TASK(timer2_0, 200, 1) {
-                    slow_vout = GET_VOUT();
+                    slow_vout = GET_BVOUT();
                 }
                 
                 TIMER_TASK(timer2_1, 50, 1) {
@@ -207,30 +210,17 @@ void adc3_receive_proc(int id, void *pbuf, int len)
     }
     
     if(id == 3) {
-        TIMER_TASK(timer3, 1000, 1) {
-
-            float Vtemp_sensor;
-            uint16_t TS_CAL1;
-            uint16_t TS_CAL2;
-
-            uint32_t   uwConvertedValue;
-
-            TS_CAL1 = *(__IO uint16_t *)(0x1FF1E820);
-            TS_CAL2 = *(__IO uint16_t *)(0x1FF1E840);
-
-            uwConvertedValue = adc_data[0];  /* 读取数值 */
-            Vtemp_sensor = uwConvertedValue;
-            Vtemp_sensor = (110.0 - 30.0) * Vtemp_sensor/ (TS_CAL2 - TS_CAL1) + (110.0 * TS_CAL1 - 30.0 * TS_CAL2)/(TS_CAL1 - TS_CAL2);   /* 转换 */
-            APP_DEBUG("TS_CAL1(30C) = %d, TS_CAL2(110C) = %d, cpu temp:  (%d) %.2f C \r\n", TS_CAL1, TS_CAL2, uwConvertedValue, Vtemp_sensor);
-            
-    #if TTS_ON && 0
-            int len = snprintf(tts_buf, 512, "当前温度%.2f  ", Vtemp_sensor);
-            int ret = tts_puts(tts_buf, len);
-            if(ret > 0) {
-                APP_WARN("TTS OUT: %s\r\n", tts_buf);
+        static uint32_t local_draw = 0;
+        const uint32_t local_draw_speed = (44100/5000); //5000 sample/s
+        
+        uint8_t *adc_data_u8 = (uint8_t *)pbuf;
+        
+        for(int i=0; i<ADC3_CONV_NUMBER; i++) {
+            local_draw++;
+            if(local_draw >= local_draw_speed) {
+                gui_wave_set(&gwav1, EASY_LR(adc_data_u8[i] , 0, 0, 255, 120.0), C_GREEN);
+                local_draw = 0;
             }
-    #endif
-
         }
     }
 }
@@ -244,8 +234,6 @@ void led_debug_proc(void)
     LED_REV(LED0_BASE);
     tts_player();
     
-
-    static uint16_t color_buf[4] = {RED, GREEN, BLUE, YELLOW};
     static uint16_t i = 0;
     i = (i+1) % 4;
     
@@ -256,7 +244,8 @@ void led_debug_proc(void)
         UG_TouchUpdate(-1, -1, TOUCH_STATE_RELEASED );
     
     
-    lcd_printf("VIN %.3fV, VOUT %.3fV\n", GET_VIN(), GET_VOUT());
+    lcd_printf("VIN %.3fV, VOUT %.3fV\n", GET_PVIN(), GET_BVOUT());
+    lcd_printf("IOUT %.3fA\n", GET_BIOUT());
     
     TIMER_TASK(timer0, 1000, 1) {
         static uint32_t last_timer = 0;
@@ -265,6 +254,7 @@ void led_debug_proc(void)
         last_timer = hal_read_TickCounter();
     }
     
+//    static uint16_t color_buf[4] = {RED, GREEN, BLUE, YELLOW};
 //    UG_FillScreen( color_buf[i] );
 }
 

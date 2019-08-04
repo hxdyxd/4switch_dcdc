@@ -9,15 +9,23 @@
 struct adc_adjustment_t value_adc_adjustment_key[ADC1_CHANNEL_NUMBER] = {
     {
         .key = 10.0/(100 + 10),
-        .info = "VOUT",
+        .info = "BVOUT",
     },
     {
-        .key = 10.0/(180 + 10),
-        .info = "VIN",
+        .key = 10.0/(150 + 10),
+        .info = "BVIN",
     },
     {
-        .key = 10.0/(180 + 10),
-        .info = "VLED",
+        .key = (300.0/10) * 0.01,
+        .info = "BIOUT",
+    },
+    {
+        .key = 10.0/(150 + 10),
+        .info = "LVOUT",
+    },
+    {
+        .key = (300.0/10) * 0.02,
+        .info = "LIOUT",
     },
 };
 
