@@ -7,16 +7,16 @@
 #include "app_debug.h"
 
 
-#define MODE_CH1         0
+#define MODE_BATIN         0
+#define MODE_LEDOUT        1
+
+
 
 #define SOFT_TIMER_LED_DEBUG_ID        (0)
 #define SOFT_TIMER_LOW_VIN_ID          (1)
 #define SOFT_TIMER_UGUI_ID             (2)
 
 
-#define GET_BVOUT()         adc_real_value_array[0]
-#define GET_PVIN()          adc_real_value_array[1]
-#define GET_BIOUT()         adc_real_value_array[2]
 
 #define MAX_OUTPUT_DUTY    H4SPWM_PERIOD_185PER
 

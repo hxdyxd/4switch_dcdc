@@ -1,43 +1,44 @@
 /* 2019 06 25 */
 /* By hxdyxd */
 #include "adc_algorithm.h"
-#include "data_interface_hal.h"
 
 /*
  * Hardware gain
  */
 struct adc_adjustment_t value_adc_adjustment_key[ADC1_CHANNEL_NUMBER] = {
-    {
+    [BVOUT] = {
         .key = 10.0/(100 + 10),
         .info = "BVOUT",
     },
-    {
+    [PVIN] = {
         .key = 10.0/(150 + 10),
-        .info = "BVIN",
+        .info = "PVIN",
     },
-    {
+    [BIOUT] = {
         .key = (300.0/10) * 0.01,
         .info = "BIOUT",
     },
-    {
+    [LVOUT] = {
         .key = 10.0/(150 + 10),
         .info = "LVOUT",
     },
-    {
+    [LIOUT] = {
         .key = (300.0/10) * 0.02,
         .info = "LIOUT",
     },
 };
 
+
 /**
   * @brief  ADC PHYSICAL VALUE GET
   */
-float value_adc_physical_get(float adc_voltage, int id)
+float value_adc_physical_set(float adc_voltage, int id)
 {
     if(id >= ADC1_CHANNEL_NUMBER) {
         return -1.0;
     }
-    return (float)adc_voltage/value_adc_adjustment_key[id].key;
+    value_adc_adjustment_key[id].physical_val = (float)adc_voltage/value_adc_adjustment_key[id].key;
+    return value_adc_adjustment_key[id].physical_val;
 }
 
 /**

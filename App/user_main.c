@@ -15,22 +15,31 @@
 
 
 uint16_t adc_val[ADC1_CHANNEL_NUMBER];
-float adc_real_value_array[ADC1_CHANNEL_NUMBER];
+
 
 static uint16_t maxadc_v[ADC1_CHANNEL_NUMBER] = {0, };
 static uint16_t minadc_v[ADC1_CHANNEL_NUMBER] = {0xffff, };
 
 static pidc_t pid_ch1 = {
-    .kp = 1.2,
+    .kp = 6.2,
     .ki = 0.0,
     .kd = 0.1,
     .i_max = 0,
 };
 
-static uint8_t u8_mode_set = MODE_CH1;
-static uint8_t low_vin = 0;
+static pidc_t pid_ch2 = {
+    .kp = 6.2,
+    .ki = 0.0,
+    .kd = 0.1,
+    .i_max = 0,
+};
 
-static float vout_set_val = 16.0;
+
+static uint8_t u8_mode_set = MODE_BATIN;
+
+
+static float biout_set_val = 0.5f;
+static float liout_set_val = 0.5f;
 
 static int ctrl_counter = 0;
 
@@ -103,16 +112,21 @@ void low_vin_timeout_proc(void)
 
 void pid_ch1_control_proc(void)
 {
-    float vvvvv = GET_BVOUT();
+    float vvvvv = GET_ADC(BIOUT);
     uint16_t ctrl_duty = pid_ctrl(&pid_ch1, vvvvv );
     
     //欠压保护
-    if(GET_PVIN() < 2.0f) {
+    if(GET_ADC(PVIN) < 2.0f) {
 //        if(!low_vin) {
 //            low_vin = 1;
 //            soft_timer_create(SOFT_TIMER_LOW_VIN_ID, 1, 0, low_vin_timeout_proc, 200);
 //        }
-        ctrl_duty = pid_ch1.output = H4SPWM_PERIOD_5PER;
+        ctrl_duty = pid_ch1.output = H4SPWM_PERIOD_95PER;
+    }
+    
+    //过压保护
+    if(GET_ADC(BVOUT) > 30.0f) {
+        ctrl_duty = pid_ch1.output = H4SPWM_PERIOD_95PER;
     }
     
     
@@ -125,6 +139,32 @@ void pid_ch1_control_proc(void)
         s16_cur_duty_min = ctrl_duty;
 }
 
+
+
+void pid_ch2_control_proc(void)
+{
+    float vvvvv = GET_ADC(LIOUT);
+    uint16_t ctrl_duty = pid_ctrl(&pid_ch2, vvvvv );
+    
+    //欠压保护
+    if(GET_ADC(BVOUT) < 10.0f) {
+        ctrl_duty = pid_ch2.output = H4SPWM_PERIOD_90PER;
+    }
+    
+    //过压保护
+    if(GET_ADC(LVOUT) > 35.0f) {
+        ctrl_duty = pid_ch1.output = H4SPWM_PERIOD_95PER;
+    }
+    
+    
+    h4s_buck_boost_pwm_set_duty(H4SPWM_PERIOD_185PER - ctrl_duty);
+    
+    //debug 1s duty value
+    if(ctrl_duty > s16_cur_duty_max)
+        s16_cur_duty_max = ctrl_duty;
+    if(ctrl_duty < s16_cur_duty_min)
+        s16_cur_duty_min = ctrl_duty;
+}
 
 
 
@@ -156,17 +196,48 @@ void adc3_receive_proc(int id, void *pbuf, int len)
                 if(adc_val[i] < minadc_v[i]) {
                     minadc_v[i] = adc_val[i];
                 }
-                adc_real_value_array[i] = value_adc_physical_get( ADC_16BIT_VOLTAGE_GET(adc_val[i]), i);
+                value_adc_physical_set( ADC_16BIT_VOLTAGE_GET(adc_val[i]), i);
             }
             
-            pid_ch1_control_proc();
+            
+            if(GET_ADC(PVIN) > 10.0f) {
+                //charge mode
+                if(u8_mode_set != MODE_BATIN) {
+                    u8_mode_set = MODE_BATIN;
+                    pid_ch1.output = H4SPWM_PERIOD_95PER;
+                }
+                
+            } else if(GET_ADC(PVIN) < 5.0f) {
+                if(u8_mode_set != MODE_LEDOUT) {
+                    u8_mode_set = MODE_LEDOUT;
+                    pid_ch2.output = H4SPWM_PERIOD_90PER;
+                }
+            }
+            
+            
+            switch(u8_mode_set) {
+            case MODE_BATIN:
+                LED_HIGH(LED_OUT);
+                pid_ch1_control_proc();
+                break;
+            case MODE_LEDOUT:
+                LED_LOW(LED_OUT);
+                pid_ch2_control_proc();
+            default:
+                break;
+            }
             ctrl_counter++;
             
             TIMER_TASK(timer1, 1000, 1) {
+                if(u8_mode_set == 0) {
+                    APP_DEBUG(RED_FONT, "status: MODE_BATIN \r\n");
+                } else if(u8_mode_set == 1) {
+                    APP_DEBUG(GREEN_FONT, "status: MODE_LEDOUT \r\n");
+                }
                 for(int i=0; i<ADC1_CHANNEL_NUMBER; i++) {
                     PRINTF("[%s] = %d(dt:%d) %.3f V\r\n", value_adc_info(i), adc_val[i], maxadc_v[i] - minadc_v[i], ADC_16BIT_VOLTAGE_GET(adc_val[i]) );
                     
-                    PRINTF("%s: %.3f V/A \r\n", value_adc_info(i), adc_real_value_array[i]);
+                    PRINTF("%s: %.3f V/A \r\n", value_adc_info(i), GET_ADC(i) );
 
                     maxadc_v[i] = 0;
                     minadc_v[i] = 0xffff;
@@ -187,22 +258,29 @@ void adc3_receive_proc(int id, void *pbuf, int len)
             }
             
             TIMER_TASK(timer2, 10, 1) {
+                static float slow_vout;
+                static uint16_t color_mode[2] = {C_ORANGE, C_GREEN};
+                static char *name_mode[2] = {"BVOUT", "LVOUT"};
+                static int id_mode[2] = {BVOUT, LVOUT};
+                static pidc_t *pid_mode[2] = {&pid_ch1, &pid_ch2};
                 
                 //gui_wave_set(&gwav1, EASY_LR(GET_VIN(), 0, 0, 30, 120), C_BLUE);
-                //gui_wave_set(&gwav1, EASY_LR(pid_ch1.output, H4SPWM_PERIOD_5PER, 0, H4SPWM_PERIOD_185PER, 120.0), C_MAGENTA);
-                
-                gui_wave_set(&gwav2, EASY_LR(GET_BVOUT(), 0, 0, 30, 120), C_ORANGE);
                 
                 
-                static float slow_vout;
+                gui_wave_set(&gwav1, EASY_LR(pid_mode[u8_mode_set]->output, H4SPWM_PERIOD_5PER, 0, H4SPWM_PERIOD_185PER, 120.0), C_MAGENTA);
+                
+                gui_wave_set(&gwav2, EASY_LR(GET_ADC(id_mode[u8_mode_set]), 0, 0, 40, 120), color_mode[u8_mode_set] );
+                
+                
                 TIMER_TASK(timer2_0, 200, 1) {
-                    slow_vout = GET_BVOUT();
+                    slow_vout = GET_ADC(id_mode[u8_mode_set]);
                 }
                 
                 TIMER_TASK(timer2_1, 50, 1) {
                     gui_wave_draw(gwavs, 2);
-                    ug_printf(0, 0, C_MAGENTA, "Duty %.1f%%", pid_ch1.output*100.0/H4SPWM_PERIOD_185PER);
-                    ug_printf(0, 14, C_ORANGE, "VOUT %.3fV", slow_vout);
+                    
+                    ug_printf(0, 0, C_MAGENTA, "Duty %.1f%%", pid_mode[u8_mode_set]->output*100.0f/H4SPWM_PERIOD_185PER);
+                    ug_printf(0, 14, color_mode[u8_mode_set], "%s %.3fV/%dms", name_mode[u8_mode_set], slow_vout, 10*30);
                 }
                 
             }
@@ -218,7 +296,7 @@ void adc3_receive_proc(int id, void *pbuf, int len)
         for(int i=0; i<ADC3_CONV_NUMBER; i++) {
             local_draw++;
             if(local_draw >= local_draw_speed) {
-                gui_wave_set(&gwav1, EASY_LR(adc_data_u8[i] , 0, 0, 255, 120.0), C_GREEN);
+                //gui_wave_set(&gwav1, EASY_LR(adc_data_u8[i] , 0, 0, 255, 120.0), C_PINK);
                 local_draw = 0;
             }
         }
@@ -243,15 +321,26 @@ void led_debug_proc(void)
     else
         UG_TouchUpdate(-1, -1, TOUCH_STATE_RELEASED );
     
+    short encoder_cnt = ENCODER_CNT;
+    ENCODER_CNT = 0;
+    APP_DEBUG("ENCODER_CNT = %d \r\n", encoder_cnt);
     
-    lcd_printf("VIN %.3fV, VOUT %.3fV\n", GET_PVIN(), GET_BVOUT());
-    lcd_printf("IOUT %.3fA\n", GET_BIOUT());
     
-    TIMER_TASK(timer0, 1000, 1) {
-        static uint32_t last_timer = 0;
-        lcd_printf("fps: %d\n", fps_inc*1000/(hal_read_TickCounter() - last_timer) );
-        fps_inc = 0;
-        last_timer = hal_read_TickCounter();
+    TIMER_TASK(timer0, 500, 1) {
+        if(u8_mode_set == MODE_BATIN) {
+            lcd_printf("PV %.3fV, BV %.3fV\n", GET_ADC(PVIN), GET_ADC(BVOUT));
+            lcd_printf("BI %.3fA\n", GET_ADC(BIOUT));
+        } else {
+            lcd_printf("BV %.3fV, LV %.3fV\n", GET_ADC(BVOUT), GET_ADC(LVOUT));
+            lcd_printf("LI %.3fA\n", GET_ADC(LIOUT));
+        }
+        
+        TIMER_TASK(timer0, 1000, 1) {
+            static uint32_t last_timer = 0;
+            lcd_printf("fps: %d\n", fps_inc*1000/(hal_read_TickCounter() - last_timer) );
+            fps_inc = 0;
+            last_timer = hal_read_TickCounter();
+        }
     }
     
 //    static uint16_t color_buf[4] = {RED, GREEN, BLUE, YELLOW};
@@ -262,18 +351,27 @@ void led_debug_proc(void)
 void user_setup(void)
 {
     PRINTF("\r\n\r\n[H7] Build , %s %s \r\n", __DATE__, __TIME__);
+    
+    /* hardware lowlevel init */
     data_interface_hal_init();
     
+    /* adc parametra */
     param_default_value_init();
     
+    /* pid controler */
     pid_set_output_limit(&pid_ch1, MAX_OUTPUT_DUTY, 0);
-    pid_set_value(&pid_ch1, vout_set_val);
+    pid_set_output_limit(&pid_ch2, MAX_OUTPUT_DUTY, 0);
     
+    pid_set_value(&pid_ch1, biout_set_val);
+    pid_set_value(&pid_ch2, liout_set_val);
+    
+    /* soft timer */
     soft_timer_init();
     
     soft_timer_create(SOFT_TIMER_LED_DEBUG_ID, 1, 1, led_debug_proc, 200);
     soft_timer_create(SOFT_TIMER_UGUI_ID, 1, 1, UG_Update, 20);
     
+    /* ugui */
     gui_init();
     gui_window_init();
     
@@ -288,6 +386,7 @@ void user_loop(void)
 {
     soft_timer_proc();
     
+    /* lcd flush */
     TIMER_TASK(time0, 33, 1) {
         if(lcd240x240_flush() >= 0) {
             fps_inc++;
@@ -300,6 +399,7 @@ void user_loop(void)
     }
 #endif
 
+    /* adc proc */
     adc_rx_proc(adc3_receive_proc);
 }
 

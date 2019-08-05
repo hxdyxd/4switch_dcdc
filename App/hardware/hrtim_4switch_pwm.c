@@ -18,6 +18,9 @@ void h4s_pwm_init(void)
     HAL_HRTIM_WaveformOutputStart(&hhrtim, HRTIM_OUTPUT_TB1 | HRTIM_OUTPUT_TB2);
     HAL_HRTIM_WaveformCountStart(&hhrtim, HRTIM_TIMERID_TIMER_B);
     
+    HAL_HRTIM_WaveformOutputStart(&hhrtim, HRTIM_OUTPUT_TD1);
+    HAL_HRTIM_WaveformCountStart(&hhrtim, HRTIM_TIMERID_TIMER_D);  //ADC SINGLE DEBUG
+    
     h4s_pwm_set_duty(2, H4SPWM_PERIOD/2);
     h4s_buck_boost_pwm_set_duty(H4SPWM_PERIOD_95PER);
 }

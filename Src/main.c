@@ -129,13 +129,14 @@ int main(void)
   MX_USART1_UART_Init();
   MX_QUADSPI_Init();
   MX_DAC1_Init();
-  MX_TIM4_Init();
   MX_ADC1_Init();
   MX_HRTIM_Init();
   MX_ADC3_Init();
   MX_TIM3_Init();
   MX_SPI2_Init();
   MX_JPEG_Init();
+  MX_TIM15_Init();
+  MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
   user_setup();
   /* USER CODE END 2 */

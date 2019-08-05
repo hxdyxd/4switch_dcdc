@@ -4,12 +4,30 @@
 #define __ADC_ALGORITHM_H
 
 #include <stdint.h>
+#include "data_interface_hal.h"
+
+
+/* ADC CHANNEL */
+#define BVOUT           (0)
+#define PVIN            (1)
+#define BIOUT           (2)
+#define LVOUT           (3)
+#define LIOUT           (4)
+
+#define GET_ADC(ch)   (value_adc_adjustment_key[ch].physical_val)
+
 
 struct adc_adjustment_t
 {
+    //parametra
     float key; //hardware gain
     char *info;
+    
+    //var
+    float physical_val;
 };
+
+extern struct adc_adjustment_t value_adc_adjustment_key[ADC1_CHANNEL_NUMBER];
 
 
 struct param_t
@@ -38,12 +56,12 @@ typedef struct {
 
 /*******************************************************************************
 * Function Name  : value_adc_adjustment.
-* Description    : Get the original voltage or current values
+* Description    : set the original voltage or current values
 * Input          : None.
 * Output         : None.
 * Return         : None.
 *******************************************************************************/
-float value_adc_physical_get(float adc_voltage, int id);
+float value_adc_physical_set(float adc_voltage, int id);
 
 /*******************************************************************************
 * Function Name  : value_adc_info.

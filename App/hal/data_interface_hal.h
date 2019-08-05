@@ -27,6 +27,10 @@
 #define USART_RX_TIMEOUT_MS  (10)
 
 
+//ENCODER
+#define ENCODER_CNT    (TIM3->CNT)
+
+
 /* LEDS */
 #define LED_OFF(id)  HAL_GPIO_WritePin(id, GPIO_PIN_SET)
 #define LED_ON(id)   HAL_GPIO_WritePin(id, GPIO_PIN_RESET)
@@ -39,6 +43,8 @@
 #define LCD_RES     LCD_RES_GPIO_Port  , LCD_RES_Pin
 #define LCD_CLK     GPIOB  , GPIO_PIN_10
 #define LCD_MOSI    GPIOC  , GPIO_PIN_1
+
+#define LED_OUT     LED_OUT_GPIO_Port  , LED_OUT_Pin
 
 /*******************************************************************************
 * Function Name  : data_interface_hal_init.

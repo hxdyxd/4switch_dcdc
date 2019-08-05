@@ -41,7 +41,8 @@ void data_interface_hal_init(void)
 
     hal32_adc_init();
     
-    HAL_TIM_Base_Start(&htim4);  //dac timer
+    HAL_TIM_Encoder_Start(&htim3, TIM_CHANNEL_ALL);
+    HAL_TIM_Base_Start(&htim15);  //dac timer
     
     h4s_pwm_init();
     

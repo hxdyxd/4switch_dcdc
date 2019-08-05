@@ -123,7 +123,7 @@ void hal32_adc_init(void)
         HAL32_ADC_ERR("start adc3 dma error %d\r\n", HAL_ADC_GetError(&hadc3));
     }
     
-    HAL_TIM_Base_Start(&htim3);  //adc timer
+    HAL_TIM_Base_Start(&htim4);  //adc timer
 }
 
 /******************* (C) COPYRIGHT 2019 hxdyxd *****END OF FILE****/
