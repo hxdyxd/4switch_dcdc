@@ -137,3 +137,4 @@ void gui_wave_draw(struct lcd_wave_t **hwavs, uint8_t num)
     }
 }
 
+/*****************************END OF FILE***************************/

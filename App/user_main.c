@@ -21,14 +21,14 @@ static uint16_t maxadc_v[ADC1_CHANNEL_NUMBER] = {0, };
 static uint16_t minadc_v[ADC1_CHANNEL_NUMBER] = {0xffff, };
 
 static pidc_t pid_ch1 = {
-    .kp = 6.2,
+    .kp = 8.5,
     .ki = 0.0,
     .kd = 0.1,
     .i_max = 0,
 };
 
 static pidc_t pid_ch2 = {
-    .kp = 6.2,
+    .kp = 8.5,
     .ki = 0.0,
     .kd = 0.1,
     .i_max = 0,
@@ -321,9 +321,23 @@ void led_debug_proc(void)
     else
         UG_TouchUpdate(-1, -1, TOUCH_STATE_RELEASED );
     
+    /* encoder */
     short encoder_cnt = ENCODER_CNT;
     ENCODER_CNT = 0;
-    APP_DEBUG("ENCODER_CNT = %d \r\n", encoder_cnt);
+    
+    if(encoder_cnt != 0) {
+        APP_DEBUG("ENCODER_CNT = %d \r\n", encoder_cnt);
+        lcd_printf("ENCODER_CNT = %d \r\n", encoder_cnt);
+        float point = encoder_cnt * 0.25f;
+        liout_set_val += point * 0.01f;
+        if(liout_set_val > 1.0f)
+            liout_set_val = 1.0f;
+        else if(liout_set_val < 0.0f) {
+            liout_set_val = 0.0f;
+        }
+        pid_set_value(&pid_ch2, liout_set_val);
+    }
+    /***********************************************/
     
     
     TIMER_TASK(timer0, 500, 1) {
@@ -346,6 +360,16 @@ void led_debug_proc(void)
 //    static uint16_t color_buf[4] = {RED, GREEN, BLUE, YELLOW};
 //    UG_FillScreen( color_buf[i] );
 }
+
+
+void key_inout_receive_proc(int8_t id)
+{
+    APP_DEBUG("KEY = %d \r\n", id);
+    lcd_printf("KEY = %d \r\n", id);
+    
+}
+
+
 
 
 void user_setup(void)
@@ -384,23 +408,30 @@ void user_setup(void)
 
 void user_loop(void)
 {
-    soft_timer_proc();
+    /* key scan task */
+    TIMER_TASK(time0, 5, 1) {
+        key_inout_proc(key_inout_receive_proc);
+    }
     
     /* lcd flush */
-    TIMER_TASK(time0, 33, 1) {
+    TIMER_TASK(time1, 33, 1) {
         if(lcd240x240_flush() >= 0) {
             fps_inc++;
         }
     }
-
+    
 #if TTS_ON
     TIMER_TASK(time3, 50, 1) {
         tts_proc();
     }
 #endif
 
-    /* adc proc */
+    /* real time task */
+    /* adc proc task */
     adc_rx_proc(adc3_receive_proc);
+    
+    /* soft timer */
+    soft_timer_proc();
 }
 
 

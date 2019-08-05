@@ -48,6 +48,8 @@ void data_interface_hal_init(void)
     
     lcd240x240_init();
     lcd240x240_clear(0xffff);
+    
+    key_inout_init();
 }
 
 
