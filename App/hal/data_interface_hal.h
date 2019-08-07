@@ -16,11 +16,12 @@
 #include "dac.h"
 #include "tim.h"
 #include "spi.h"
-#include "hrtim_4switch_pwm.h"
 #include "qspi_flash.h"
 #include "hal32_adc.h"
 #include "lcd240x240.h"
 #include "key_inout.h"
+
+
 
 //UART
 #define UART_BUFFER_SIZE     (256)
@@ -45,6 +46,11 @@
 #define LCD_MOSI    GPIOC  , GPIO_PIN_1
 
 #define LED_OUT     LED_OUT_GPIO_Port  , LED_OUT_Pin
+
+#define DDS_FSY     DDS_FSY_GPIO_Port  , DDS_FSY_Pin
+#define DDS_DAT     DDS_DAT_GPIO_Port  , DDS_DAT_Pin
+#define DDS_CLK     DDS_CLK_GPIO_Port  , DDS_CLK_Pin
+#define DDS_CS      DDS_CS_GPIO_Port   , DDS_CS_Pin
 
 /*******************************************************************************
 * Function Name  : data_interface_hal_init.

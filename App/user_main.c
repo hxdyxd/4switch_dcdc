@@ -7,45 +7,12 @@
 #include "user_main.h"
 #include "function_task.h"
 #include "data_interface_hal.h"
-#include "tts.h"
-#include <arm_math.h>
+
+
 #include "adc_algorithm.h"
 #include "soft_timer.h"
 #include "lcd_manager.h"
-
-
-uint16_t adc_val[ADC1_CHANNEL_NUMBER];
-
-
-static uint16_t maxadc_v[ADC1_CHANNEL_NUMBER] = {0, };
-static uint16_t minadc_v[ADC1_CHANNEL_NUMBER] = {0xffff, };
-
-static pidc_t pid_ch1 = {
-    .kp = 8.5,
-    .ki = 0.0,
-    .kd = 0.1,
-    .i_max = 0,
-};
-
-static pidc_t pid_ch2 = {
-    .kp = 8.5,
-    .ki = 0.0,
-    .kd = 0.1,
-    .i_max = 0,
-};
-
-
-static uint8_t u8_mode_set = MODE_BATIN;
-
-
-static float biout_set_val = 0.5f;
-static float liout_set_val = 0.5f;
-
-static int ctrl_counter = 0;
-
-static int16_t s16_cur_duty_max = 0;
-static int16_t s16_cur_duty_min = MAX_OUTPUT_DUTY;
-
+#include "AD9833.h"
 
 
 void user_system_setup(void)
@@ -53,255 +20,139 @@ void user_system_setup(void)
 
 }
 
+#define  FREQ_SCAN           (0)
+#define  FREQ_SCAN_START     (1)
 
-#define  TTS_ON      (0)
 
-
-void tts_player(void)
-{
-    SWITCH_TASK_INIT(task1);
-    
-    
-#if TTS_ON
-    static char tts_buf[512];
-    SWITCH_TASK(task1) {
-        int len = 0;
-        if(low_vin) {
-            len = snprintf(tts_buf, 512, "输入欠压  ");
-        } else {
-            len = snprintf(tts_buf, 512, "输入电压%.3f伏 输出电压%.3f伏  ", GET_VIN(), GET_VOUT());
-        }
-        
-        int ret = tts_puts(tts_buf, len);
-        if(ret > 0) {
-            APP_WARN("TTS OUT: %s\r\n", tts_buf);
-        }
-    }
-#endif
-    
-    SWITCH_TASK_END(task1);
-}
-
-#if 0
-void low_vin_timeout_proc(void)
-{
-    static float vout_set_step = 0;
-    
-    if(!low_vin)
-        return;
-    
-    if(GET_VIN() >= 3.0f) {
-        low_vin++;
-        vout_set_step += (vout_set_val - 0)/10;
-        pid_set_value(&pid_ch1, vout_set_step);
-        if(vout_set_step < vout_set_val) {
-            APP_WARN("set vout = %.3f\r\n", vout_set_step);
-            soft_timer_create(SOFT_TIMER_LOW_VIN_ID, 1, 0, low_vin_timeout_proc, 400);
-        } else {
-            APP_WARN("set vout = %.3f, low vin exit!\r\n", vout_set_step);
-            low_vin = 0;
-        }
-    } else {
-        vout_set_step = 0;
-        pid_set_value(&pid_ch1, vout_set_step);
-        APP_WARN("low vin wait\r\n");
-        soft_timer_create(SOFT_TIMER_LOW_VIN_ID, 1, 0, low_vin_timeout_proc, 200);
-    }
-}
-#endif
-
-void pid_ch1_control_proc(void)
-{
-    float vvvvv = GET_ADC(BIOUT);
-    uint16_t ctrl_duty = pid_ctrl(&pid_ch1, vvvvv );
-    
-    //欠压保护
-    if(GET_ADC(PVIN) < 2.0f) {
-//        if(!low_vin) {
-//            low_vin = 1;
-//            soft_timer_create(SOFT_TIMER_LOW_VIN_ID, 1, 0, low_vin_timeout_proc, 200);
-//        }
-        ctrl_duty = pid_ch1.output = H4SPWM_PERIOD_95PER;
-    }
-    
-    //过压保护
-    if(GET_ADC(BVOUT) > 30.0f) {
-        ctrl_duty = pid_ch1.output = H4SPWM_PERIOD_95PER;
-    }
-    
-    
-    h4s_buck_boost_pwm_set_duty(ctrl_duty);
-    
-     //debug 1s duty value
-    if(ctrl_duty > s16_cur_duty_max)
-        s16_cur_duty_max = ctrl_duty;
-    if(ctrl_duty < s16_cur_duty_min)
-        s16_cur_duty_min = ctrl_duty;
-}
+static uint8_t buffer_wave_1[240];
+static uint8_t buffer_wave_2[240];
+static struct lcd_wave_t gwav1, gwav2;
+static struct lcd_wave_t *gwavs[2] = {
+    &gwav1, &gwav2, 
+};
 
 
 
-void pid_ch2_control_proc(void)
-{
-    float vvvvv = GET_ADC(LIOUT);
-    uint16_t ctrl_duty = pid_ctrl(&pid_ch2, vvvvv );
-    
-    //欠压保护
-    if(GET_ADC(BVOUT) < 10.0f) {
-        ctrl_duty = pid_ch2.output = H4SPWM_PERIOD_90PER;
-    }
-    
-    //过压保护
-    if(GET_ADC(LVOUT) > 35.0f) {
-        ctrl_duty = pid_ch1.output = H4SPWM_PERIOD_95PER;
-    }
-    
-    
-    h4s_buck_boost_pwm_set_duty(H4SPWM_PERIOD_185PER - ctrl_duty);
-    
-    //debug 1s duty value
-    if(ctrl_duty > s16_cur_duty_max)
-        s16_cur_duty_max = ctrl_duty;
-    if(ctrl_duty < s16_cur_duty_min)
-        s16_cur_duty_min = ctrl_duty;
-}
+uint8_t mode_run = 0;
+
+
+uint8_t dds_output_amp = 100;
+float dds_output_freq = 1e3;
 
 
 
+float abs_outputbuf[FFT_LENGTH];
+
+uint16_t dma_buf_div1[FFT_LENGTH];
+uint16_t dma_buf_div2[FFT_LENGTH];
+uint16_t dma_buf_tmp[FFT_LENGTH];
+
+float gs_base_amp = 0;
 
 void adc3_receive_proc(int id, void *pbuf, int len)
 {
     uint16_t *adc_data = (uint16_t *)pbuf;
     
-    static uint8_t buffer_wave_1[240];
-    static uint8_t buffer_wave_2[240];
-    static struct lcd_wave_t gwav1, gwav2;
-    static struct lcd_wave_t *gwavs[2] = {
-        &gwav1, &gwav2, 
-    };
-    
-    INIT_TASK(init0) {
-        gui_wave_init(&gwav1, 0, 0, 240, 120, buffer_wave_1, C_BLACK);
-        gui_wave_init(&gwav2, 0, 0, 240, 120, buffer_wave_2, C_BLACK);
-    }
     
     
     if(id == 1) {
-        /*TIMER_TASK(timer0, 1, 1)*/ {
-            for(int i=0; i<ADC1_CHANNEL_NUMBER; i++) {
-                adc_val[i] = No_Max_Min_Filter(adc_data, ADC1_CONV_NUMBER, ADC1_CHANNEL_NUMBER, i);
-                if(adc_val[i] > maxadc_v[i]) {
-                    maxadc_v[i] = adc_val[i];
-                }
-                if(adc_val[i] < minadc_v[i]) {
-                    minadc_v[i] = adc_val[i];
-                }
-                value_adc_physical_set( ADC_16BIT_VOLTAGE_GET(adc_val[i]), i);
-            }
-            
-            
-            if(GET_ADC(PVIN) > 10.0f) {
-                //charge mode
-                if(u8_mode_set != MODE_BATIN) {
-                    u8_mode_set = MODE_BATIN;
-                    pid_ch1.output = H4SPWM_PERIOD_95PER;
-                }
-                
-            } else if(GET_ADC(PVIN) < 5.0f) {
-                if(u8_mode_set != MODE_LEDOUT) {
-                    u8_mode_set = MODE_LEDOUT;
-                    pid_ch2.output = H4SPWM_PERIOD_90PER;
-                }
-            }
-            
-            
-            switch(u8_mode_set) {
-            case MODE_BATIN:
-                LED_HIGH(LED_OUT);
-                pid_ch1_control_proc();
-                break;
-            case MODE_LEDOUT:
-                LED_LOW(LED_OUT);
-                pid_ch2_control_proc();
-            default:
-                break;
-            }
-            ctrl_counter++;
-            
-            TIMER_TASK(timer1, 1000, 1) {
-                if(u8_mode_set == 0) {
-                    APP_DEBUG(RED_FONT, "status: MODE_BATIN \r\n");
-                } else if(u8_mode_set == 1) {
-                    APP_DEBUG(GREEN_FONT, "status: MODE_LEDOUT \r\n");
-                }
-                for(int i=0; i<ADC1_CHANNEL_NUMBER; i++) {
-                    PRINTF("[%s] = %d(dt:%d) %.3f V\r\n", value_adc_info(i), adc_val[i], maxadc_v[i] - minadc_v[i], ADC_16BIT_VOLTAGE_GET(adc_val[i]) );
-                    
-                    PRINTF("%s: %.3f V/A \r\n", value_adc_info(i), GET_ADC(i) );
-
-                    maxadc_v[i] = 0;
-                    minadc_v[i] = 0xffff;
-                    //mat();
-                }
-                APP_DEBUG(" ctl= %d cnt/s, duty= (%5d)%.1f%% - (%5d)%.1f%% \r\n",
-                    ctrl_counter,
-                    s16_cur_duty_min, 
-                    s16_cur_duty_min*100.0/H4SPWM_PERIOD_185PER,
-                    s16_cur_duty_max,
-                    s16_cur_duty_max*100.0/H4SPWM_PERIOD_185PER
-                );
-                lcd_printf("ctl= %d cnt/s\n", ctrl_counter);
-                
-                ctrl_counter = 0;
-                s16_cur_duty_max = 0;
-                s16_cur_duty_min = MAX_OUTPUT_DUTY;
-            }
-            
-            TIMER_TASK(timer2, 10, 1) {
-                static float slow_vout;
-                static uint16_t color_mode[2] = {C_ORANGE, C_GREEN};
-                static char *name_mode[2] = {"BVOUT", "LVOUT"};
-                static int id_mode[2] = {BVOUT, LVOUT};
-                static pidc_t *pid_mode[2] = {&pid_ch1, &pid_ch2};
-                
-                //gui_wave_set(&gwav1, EASY_LR(GET_VIN(), 0, 0, 30, 120), C_BLUE);
-                
-                
-                gui_wave_set(&gwav1, EASY_LR(pid_mode[u8_mode_set]->output, H4SPWM_PERIOD_5PER, 0, H4SPWM_PERIOD_185PER, 120.0), C_MAGENTA);
-                
-                gui_wave_set(&gwav2, EASY_LR(GET_ADC(id_mode[u8_mode_set]), 0, 0, 40, 120), color_mode[u8_mode_set] );
-                
-                
-                TIMER_TASK(timer2_0, 200, 1) {
-                    slow_vout = GET_ADC(id_mode[u8_mode_set]);
-                }
-                
-                TIMER_TASK(timer2_1, 50, 1) {
-                    gui_wave_draw(gwavs, 2);
-                    
-                    ug_printf(0, 0, C_MAGENTA, "Duty %.1f%%", pid_mode[u8_mode_set]->output*100.0f/H4SPWM_PERIOD_185PER);
-                    ug_printf(0, 14, color_mode[u8_mode_set], "%s %.3fV/%dms", name_mode[u8_mode_set], slow_vout, 10*30);
-                }
-                
-            }
+        static int flag = 0;
+        
+        flag++;
+        if(flag >= 244) {
+            flag = 0;
+            APP_DEBUG("adc 1s \r\n");
         }
+        
+        for(int i=0; i<FFT_LENGTH; i++) {
+            dma_buf_div1[i] = adc_data[i*ADC1_CHANNEL_NUMBER];
+            dma_buf_div2[i] = adc_data[i*ADC1_CHANNEL_NUMBER + 1];
+        }
+        
+#if 0
+        TIMER_TASK(timer1, 1000, 1) {
+
+            //用于MATLAB绘制频域图像
+            for(int i= 0;i< FFT_LENGTH ;i++) {
+                
+                printf("%d ",  dma_buf_div1[i] );
+            }
+            printf("\r\n");
+
+        }
+#endif
+        //FFT及基波幅度分析
+        fft_fast_real_u16_to_float(dma_buf_div1, abs_outputbuf);    //实数FFT运算
+        float zero_val = abs_outputbuf[0]/FFT_LENGTH;               //直流分量
+        
+        
+        fft_hann_get(dma_buf_tmp, dma_buf_div1, zero_val);         //hann window
+        
+        fft_fast_real_u16_to_float(dma_buf_tmp, abs_outputbuf);    //实数FFT运算,with hann window
+        
+        uint32_t base_freq = find_fft_max_freq_index(abs_outputbuf, FFT_LENGTH/2);   //找出幅度最大值，前面一半数据有效
+        float base_freq_hz  = FFT_INDEX_TO_FREQ(base_freq, ADC1_FREQ_SAMP);   //转化为真实频率
+        float base_amp = FFT_ASSI(abs_outputbuf[base_freq]);
+        
+        TIMER_TASK(timer2, 10, 1) {
+            gs_base_amp = ADC_12BIT_VOLTAGE_GET(base_amp);
+            gui_wave_set(&gwav2, EASY_LR(gs_base_amp, 0, 0, 0.5, 120.0), C_ORANGE);
+        }
+        
+        TIMER_TASK(timer3, 1000, 1) {
+            APP_DEBUG( "zero_val = %.3f \r\n", zero_val );
+            APP_DEBUG("base_freq_hz = %.1f, vpp = %.3fV\r\n", base_freq_hz,  ADC_12BIT_VOLTAGE_GET(base_amp));
+            
+        }
+        
     }
     
     if(id == 3) {
-        static uint32_t local_draw = 0;
-        const uint32_t local_draw_speed = (44100/5000); //5000 sample/s
         
-        uint8_t *adc_data_u8 = (uint8_t *)pbuf;
-        
-        for(int i=0; i<ADC3_CONV_NUMBER; i++) {
-            local_draw++;
-            if(local_draw >= local_draw_speed) {
-                //gui_wave_set(&gwav1, EASY_LR(adc_data_u8[i] , 0, 0, 255, 120.0), C_PINK);
-                local_draw = 0;
-            }
-        }
     }
 }
+
+
+
+#define FS_STOP         (0)
+#define FS_START        (1)
+#define FS_NOT_DETECT   (2)
+#define FS_DETECTED     (3)
+
+uint8_t freq_scan_status = FS_STOP;
+static uint32_t cur_freq_set = 0;
+
+void freq_scan_proc(void)
+{
+    static uint32_t start_freq_set = 500;
+    
+    switch(freq_scan_status) {
+    case FS_START:
+        cur_freq_set = start_freq_set;
+        setWave(SINE, cur_freq_set);
+        soft_timer_create(SOFT_TIMER_FREQSCAN_ID, 1, 0, freq_scan_proc, 10);
+        APP_DEBUG("start freq scan, cur_freq_set = %d\r\n", cur_freq_set);
+        freq_scan_status = FS_NOT_DETECT;
+        break;
+    case FS_NOT_DETECT:
+        if(cur_freq_set >= 300000 || 0) {
+            freq_scan_status = FS_DETECTED;
+        }
+        cur_freq_set += 1000;
+        setWave(SINE, cur_freq_set);
+        soft_timer_create(SOFT_TIMER_FREQSCAN_ID, 1, 0, freq_scan_proc, 10);
+        APP_DEBUG("start freq scan, cur_freq_set = %d\r\n", cur_freq_set);
+        break;
+    case FS_DETECTED:
+        APP_DEBUG("success freq scan, cur_freq_set = %d\r\n", cur_freq_set);
+        freq_scan_status = FS_STOP;
+        break;
+    }
+    gui_wave_set(&gwav1, EASY_LR(cur_freq_set, 0, 0, 300000, 120.0), C_MAGENTA);
+}
+
+
+
 
 
 uint32_t fps_inc = 0;
@@ -310,7 +161,6 @@ void led_debug_proc(void)
 {
     
     LED_REV(LED0_BASE);
-    tts_player();
     
     static uint16_t i = 0;
     i = (i+1) % 4;
@@ -329,26 +179,23 @@ void led_debug_proc(void)
         APP_DEBUG("ENCODER_CNT = %d \r\n", encoder_cnt);
         lcd_printf("ENCODER_CNT = %d \r\n", encoder_cnt);
         float point = encoder_cnt * 0.25f;
-        liout_set_val += point * 0.01f;
-        if(liout_set_val > 1.0f)
-            liout_set_val = 1.0f;
-        else if(liout_set_val < 0.0f) {
-            liout_set_val = 0.0f;
+        /* --> */
+        dds_output_freq += point*400;
+        if(dds_output_freq < 0.0) {
+            dds_output_freq = 0;
         }
-        pid_set_value(&pid_ch2, liout_set_val);
+        if(dds_output_freq > 1.0e6) {
+            dds_output_freq = 1.0e6;
+        }
+        
+        setWave(SINE, dds_output_freq);
+        lcd_printf("SET DDS FREQ = %.1f\n", dds_output_freq);
     }
     /***********************************************/
     
     
     TIMER_TASK(timer0, 500, 1) {
-        if(u8_mode_set == MODE_BATIN) {
-            lcd_printf("PV %.3fV, BV %.3fV\n", GET_ADC(PVIN), GET_ADC(BVOUT));
-            lcd_printf("BI %.3fA\n", GET_ADC(BIOUT));
-        } else {
-            lcd_printf("BV %.3fV, LV %.3fV\n", GET_ADC(BVOUT), GET_ADC(LVOUT));
-            lcd_printf("LI %.3fA\n", GET_ADC(LIOUT));
-        }
-        
+        lcd_printf("DDS FREQ = %.1f, AMP = %d\n", dds_output_freq, dds_output_amp);
         TIMER_TASK(timer0, 1000, 1) {
             static uint32_t last_timer = 0;
             lcd_printf("fps: %d\n", fps_inc*1000/(hal_read_TickCounter() - last_timer) );
@@ -367,6 +214,24 @@ void key_inout_receive_proc(int8_t id)
     APP_DEBUG("KEY = %d \r\n", id);
     lcd_printf("KEY = %d \r\n", id);
     
+    switch(id) {
+    case 0:
+        dds_output_amp++;
+        AD9833_AmpSet(dds_output_amp);
+        break;
+    case 1:
+        dds_output_amp--;
+        AD9833_AmpSet(dds_output_amp);
+        break;
+    case 2:
+        if(freq_scan_status == FS_STOP) {
+            freq_scan_status = FS_START;
+            soft_timer_create(SOFT_TIMER_FREQSCAN_ID, 1, 0, freq_scan_proc, 10);
+        }
+        break;
+    }
+    
+    
 }
 
 
@@ -382,13 +247,6 @@ void user_setup(void)
     /* adc parametra */
     param_default_value_init();
     
-    /* pid controler */
-    pid_set_output_limit(&pid_ch1, MAX_OUTPUT_DUTY, 0);
-    pid_set_output_limit(&pid_ch2, MAX_OUTPUT_DUTY, 0);
-    
-    pid_set_value(&pid_ch1, biout_set_val);
-    pid_set_value(&pid_ch2, liout_set_val);
-    
     /* soft timer */
     soft_timer_init();
     
@@ -399,10 +257,17 @@ void user_setup(void)
     gui_init();
     gui_window_init();
     
+    AD9833_AmpSet(dds_output_amp);
+    setWave(SINE, dds_output_freq);
     
-#if TTS_ON
-    tts_init();
-#endif
+    fft_init();
+    fft_hann_init();
+    
+    
+    gui_wave_init(&gwav1, 0, 0, 240, 120, buffer_wave_1, C_BLACK);
+    gui_wave_init(&gwav2, 0, 0, 240, 120, buffer_wave_2, C_BLACK);
+    
+    printf("init success!\r\n");
 }
 
 
@@ -420,12 +285,14 @@ void user_loop(void)
         }
     }
     
-#if TTS_ON
-    TIMER_TASK(time3, 50, 1) {
-        tts_proc();
-    }
-#endif
+    TIMER_TASK(timer2_1, 100, 1) {
+        gui_wave_draw(gwavs, 2);
 
+        ug_printf(0, 0, C_MAGENTA, "FREQ %.1fkHz", cur_freq_set/1000.0);
+        ug_printf(0, 14, C_ORANGE, "FREQ %.1fmV", gs_base_amp*1000);
+        ug_printf(0, 128 - 20, C_LIGHT_CYAN, "T'D 300ms");
+    }
+    
     /* real time task */
     /* adc proc task */
     adc_rx_proc(adc3_receive_proc);

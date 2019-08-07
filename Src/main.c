@@ -43,9 +43,9 @@
 #include "adc.h"
 #include "dac.h"
 #include "dma.h"
-#include "hrtim.h"
 #include "jpeg.h"
 #include "quadspi.h"
+#include "sai.h"
 #include "spi.h"
 #include "tim.h"
 #include "usart.h"
@@ -130,13 +130,15 @@ int main(void)
   MX_QUADSPI_Init();
   MX_DAC1_Init();
   MX_ADC1_Init();
-  MX_HRTIM_Init();
   MX_ADC3_Init();
   MX_TIM3_Init();
   MX_SPI2_Init();
   MX_JPEG_Init();
   MX_TIM15_Init();
   MX_TIM4_Init();
+  MX_SAI1_Init();
+  MX_TIM2_Init();
+  MX_SPI4_Init();
   /* USER CODE BEGIN 2 */
   user_setup();
   /* USER CODE END 2 */
@@ -208,15 +210,17 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_HRTIM1|RCC_PERIPHCLK_USART1
-                              |RCC_PERIPHCLK_SPI2|RCC_PERIPHCLK_ADC
-                              |RCC_PERIPHCLK_QSPI|RCC_PERIPHCLK_CKPER;
+  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_USART1|RCC_PERIPHCLK_SPI4
+                              |RCC_PERIPHCLK_SPI2|RCC_PERIPHCLK_SAI1
+                              |RCC_PERIPHCLK_ADC|RCC_PERIPHCLK_QSPI
+                              |RCC_PERIPHCLK_CKPER;
   PeriphClkInitStruct.QspiClockSelection = RCC_QSPICLKSOURCE_D1HCLK;
   PeriphClkInitStruct.CkperClockSelection = RCC_CLKPSOURCE_HSI;
+  PeriphClkInitStruct.Sai1ClockSelection = RCC_SAI1CLKSOURCE_PLL;
   PeriphClkInitStruct.Spi123ClockSelection = RCC_SPI123CLKSOURCE_PLL;
+  PeriphClkInitStruct.Spi45ClockSelection = RCC_SPI45CLKSOURCE_D2PCLK1;
   PeriphClkInitStruct.Usart16ClockSelection = RCC_USART16CLKSOURCE_D2PCLK2;
   PeriphClkInitStruct.AdcClockSelection = RCC_ADCCLKSOURCE_CLKP;
-  PeriphClkInitStruct.Hrtim1ClockSelection = RCC_HRTIM1CLK_CPUCLK;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
   {
     Error_Handler();

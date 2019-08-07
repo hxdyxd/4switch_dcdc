@@ -38,6 +38,7 @@ void gui_init(void);
 void gui_window_init(void);
 
 void gui_wave_init(struct lcd_wave_t *hwav, uint16_t x, uint16_t y, uint16_t width, uint16_t height, uint8_t *buffer, uint16_t bgcolor);
+uint8_t gui_wave_get(struct lcd_wave_t *hwav);
 void gui_wave_set(struct lcd_wave_t *hwav, uint8_t value, uint16_t color);
 void gui_wave_draw(struct lcd_wave_t **hwavs, uint8_t num);
 

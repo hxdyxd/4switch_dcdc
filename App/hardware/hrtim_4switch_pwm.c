@@ -4,6 +4,11 @@
   */
 #include "hrtim_4switch_pwm.h"
 
+#include "app_debug.h"
+#define H4S_DBG  APP_DEBUG
+#define H4S_ERR  APP_ERROR
+
+
 /**
   * @brief  4Í¨µÀPWMÊä³ö
   */
@@ -23,6 +28,7 @@ void h4s_pwm_init(void)
     
     h4s_pwm_set_duty(2, H4SPWM_PERIOD/2);
     h4s_buck_boost_pwm_set_duty(H4SPWM_PERIOD_95PER);
+    H4S_DBG("hrtim_4switch_pwm init period: %d, freq: %.2fkhz, max duty: %d\r\n", H4SPWM_PERIOD, 400000.0/H4SPWM_PERIOD, H4SPWM_PERIOD_185PER);
 }
 
 /**

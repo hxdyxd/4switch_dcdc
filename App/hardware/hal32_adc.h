@@ -16,9 +16,12 @@
 
 /* ADC */
 #define ADC_16BIT_VOLTAGE_GET(v)    ((v)*3.0/0x10000)
+#define ADC_12BIT_VOLTAGE_GET(v)    ((v)*3.0/0x1000)
+#define ADC_8BIT_VOLTAGE_GET(v)    ((v)*3.0/0x100)
 
-#define ADC1_CONV_NUMBER      (25)
-#define ADC1_CHANNEL_NUMBER   (5)
+#define ADC1_FREQ_SAMP        (819.2e3)
+#define ADC1_CONV_NUMBER      (4096)
+#define ADC1_CHANNEL_NUMBER   (2)
 #define ADC1_BUFFER_SIZE     (ADC1_CONV_NUMBER*ADC1_CHANNEL_NUMBER*ADC_DUAL_BUFFER)
 
 #define ADC3_CONV_NUMBER      (1000)

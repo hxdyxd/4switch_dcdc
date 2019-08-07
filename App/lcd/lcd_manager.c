@@ -69,15 +69,15 @@ void gui_window_init(void)
     UG_ButtonCreate ( &window1 , &button3 ,  BTN_ID_2 ,  130 ,  10 ,  130 + 50 ,  10 + 50  ) ;
     UG_ButtonSetText ( &window1 ,  BTN_ID_2 , "Exit");
     
-    extern const unsigned char gImage_bmp[85*120*2];
-    
-    static UG_BMP logo ={
-        (void *)gImage_bmp,
-        85,
-        120,
-        BMP_BPP_16,
-        BMP_RGB565,
-    };
+//    extern const unsigned char gImage_bmp[85*120*2];
+//    
+//    static UG_BMP logo ={
+//        (void *)gImage_bmp,
+//        85,
+//        120,
+//        BMP_BPP_16,
+//        BMP_RGB565,
+//    };
     
 //    UG_ImageCreate (&window1, &image1, IMG_ID_0, 10, 120, 10 + logo.width - 1, 120 + logo.height - 1);
 //    UG_ImageSetBMP(&window1, IMG_ID_0, &logo);
@@ -86,12 +86,12 @@ void gui_window_init(void)
     
 //    UG_DrawBMP(0, 0, &logo);
     
-    for(uint16_t i = 0; i < logo.height; i++) {
-        for(uint16_t j = 0; j < logo.width; j++) {
-            int local = i*logo.width + j;
-            lcd240x240_drawpoint(j, i, gImage_bmp[local*2] | (gImage_bmp[local*2+1]<<8) );
-        }
-    }
+//    for(uint16_t i = 0; i < logo.height; i++) {
+//        for(uint16_t j = 0; j < logo.width; j++) {
+//            int local = i*logo.width + j;
+//            lcd240x240_drawpoint(j, i, gImage_bmp[local*2] | (gImage_bmp[local*2+1]<<8) );
+//        }
+//    }
     
 }
 
@@ -108,6 +108,11 @@ void gui_wave_init(struct lcd_wave_t *hwav, uint16_t x, uint16_t y, uint16_t wid
     hwav->value = 0;
 }
 
+
+uint8_t gui_wave_get(struct lcd_wave_t *hwav)
+{
+    return hwav->buffer[hwav->width-1];
+}
 
 
 void gui_wave_set(struct lcd_wave_t *hwav, uint8_t value, uint16_t color)

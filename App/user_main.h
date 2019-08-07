@@ -15,7 +15,7 @@
 #define SOFT_TIMER_LED_DEBUG_ID        (0)
 #define SOFT_TIMER_LOW_VIN_ID          (1)
 #define SOFT_TIMER_UGUI_ID             (2)
-
+#define SOFT_TIMER_FREQSCAN_ID         (3)
 
 
 #define MAX_OUTPUT_DUTY    H4SPWM_PERIOD_185PER

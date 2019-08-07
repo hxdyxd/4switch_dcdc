@@ -238,7 +238,7 @@ void lcd240x240_drawpoint(uint16_t x, uint16_t y, uint16_t color)
 
 
 
-static int current_buffer = -1;
+static volatile int current_buffer = -1;
 
 int lcd240x240_flush(void)
 {

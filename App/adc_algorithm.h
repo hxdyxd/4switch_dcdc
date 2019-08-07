@@ -7,6 +7,24 @@
 #include "data_interface_hal.h"
 
 
+/*************************************************/
+//FFT
+#define FFT_LENGTH   (ADC1_CONV_NUMBER)
+
+#define FFT_INDEX_TO_FREQ(index, samp)  ( (float)samp * index/FFT_LENGTH)
+#define FFT_ASSI(v)  ( (v)*2/FFT_LENGTH )
+
+
+void fft_init(void);
+void fft_fast_real_u16_to_float(uint16_t *buf, float *abs_outputbuf);
+uint32_t find_fft_max_freq_index(float *buf, uint32_t size);
+
+void fft_hann_init(void);
+void fft_hann_get(uint16_t *hann_out, uint16_t *input, float zero_val);
+
+/*************************************************/
+
+
 /* ADC CHANNEL */
 #define BVOUT           (0)
 #define PVIN            (1)

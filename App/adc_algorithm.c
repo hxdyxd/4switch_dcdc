@@ -1,6 +1,7 @@
 /* 2019 06 25 */
 /* By hxdyxd */
 #include "adc_algorithm.h"
+#include <arm_math.h>
 
 /*
  * Hardware gain
@@ -13,18 +14,6 @@ struct adc_adjustment_t value_adc_adjustment_key[ADC1_CHANNEL_NUMBER] = {
     [PVIN] = {
         .key = 10.0/(150 + 10),
         .info = "PVIN",
-    },
-    [BIOUT] = {
-        .key = (300.0/10) * 0.01,
-        .info = "BIOUT",
-    },
-    [LVOUT] = {
-        .key = 10.0/(150 + 10),
-        .info = "LVOUT",
-    },
-    [LIOUT] = {
-        .key = (300.0/10) * 0.02,
-        .info = "LIOUT",
     },
 };
 
@@ -102,6 +91,68 @@ void param_default_value_init(void)
 inline float get_param_value(float input, int i)
 {
     return (input * gs_para[i].k) + gs_para[i].b;
+}
+
+/*******************************************************/
+float fft_inputbuf[FFT_LENGTH];
+float fft_outputbuf[FFT_LENGTH*2];
+
+
+static arm_rfft_fast_instance_f32 srfft;
+
+
+void fft_init(void)
+{
+    arm_rfft_fast_init_f32(&srfft, FFT_LENGTH);
+}
+
+void fft_fast_real_u16_to_float(uint16_t *buf, float *abs_outputbuf)
+{
+    uint16_t i;
+    for(i=0; i<FFT_LENGTH; i++) {
+        //printf("%d ", buf[i]);
+        
+         fft_inputbuf[ i ] = buf[i]; //生成输入信号实部
+         //fft_inputbuf[ (i<<1) +1] = 0;  //虚部全部为0
+    }
+
+
+    arm_rfft_fast_f32(&srfft, fft_inputbuf, fft_outputbuf, 0);  //FFT计算(基4)
+    arm_cmplx_mag_f32(fft_outputbuf, abs_outputbuf, FFT_LENGTH); //把运算结果复数求模得幅值
+}
+
+uint32_t find_fft_max_freq_index(float *buf, uint32_t size)
+{
+    uint32_t max = 1;
+    int i;
+
+    for(i=1;i<size;i++) {
+        if( buf[i] > buf[max] ) {
+            max = i;
+        }
+    }
+
+    return max;
+}
+
+static float flat_val[FFT_LENGTH];
+
+void fft_hann_init(void)
+{
+    //hann
+    for(int i=0;i<FFT_LENGTH;i++) {
+        float pi = 3.1415926;
+        flat_val[i] = (1 - 1.93*cos(2*pi*i/FFT_LENGTH) + 1.29*cos(4*pi*i/FFT_LENGTH) - 0.388*cos(6*pi*i/FFT_LENGTH) + 0.0322*cos(8*pi*i/FFT_LENGTH))/ 4.634;
+        //printf("%d ", buf[i]);
+    }
+}
+
+void fft_hann_get(uint16_t *hann_out, uint16_t *input, float zero_val)
+{
+    //hann
+    for(int i=0;i<FFT_LENGTH;i++) {
+        hann_out[i] = (uint16_t)((input[i] - zero_val) * flat_val[i] + zero_val) ;
+    }
 }
 
 

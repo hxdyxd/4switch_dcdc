@@ -4,6 +4,11 @@
 #include "gpio.h"
 #include "data_interface_hal.h"
 
+#include "app_debug.h"
+#define KEYINOUT_DBG  APP_DEBUG
+#define KEYINOUT_ERR  APP_ERROR
+
+
 #define  KEY_TIMEOUT   (50)
 #define KEY_IO_OUT_NUM   (2)
 #define KEY_IO_IN_NUM    (4)
@@ -51,7 +56,7 @@ struct tGpio KEY_4_4[KEY_IO_NUM] = {
 
 void key_inout_init(void)
 {
-    printf("key inout init\r\n");
+    KEYINOUT_DBG("key inout init OUTxIN: %dx%d\r\n", KEY_IO_OUT_NUM, KEY_IO_IN_NUM);
 }
 
 

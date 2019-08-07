@@ -9,6 +9,7 @@
 #include <string.h>
 
 #include "app_debug.h"
+#define HAL32_ADC_DBG  APP_DEBUG
 #define HAL32_ADC_ERR  APP_ERROR
 
 
@@ -112,18 +113,23 @@ void hal32_adc_init(void)
     memset( (void *)adc3_dma_buffer, 0, sizeof(adc3_dma_buffer));
     
     if(HAL_ADC_Start_DMA(&hadc1, (void *)adc1_dma_buffer, ADC1_BUFFER_SIZE) == HAL_OK) {
-        printf("start adc1 dma at 0x%p %p\r\n", adc1_dma_buffer, &hadc1);
+        HAL32_ADC_DBG("start adc1 dma at 0x%p %p\r\n", adc1_dma_buffer, &hadc1);
     } else {
         HAL32_ADC_ERR("start adc1 dma error %d\r\n", HAL_ADC_GetError(&hadc1));
     }
 
     if(HAL_ADC_Start_DMA(&hadc3, (void *)adc3_dma_buffer, ADC3_BUFFER_SIZE) == HAL_OK) {
-        printf("start adc3 dma at 0x%p %p\r\n", adc3_dma_buffer, &hadc3);
+        HAL32_ADC_DBG("start adc3 dma at 0x%p %p\r\n", adc3_dma_buffer, &hadc3);
     } else {
         HAL32_ADC_ERR("start adc3 dma error %d\r\n", HAL_ADC_GetError(&hadc3));
     }
     
-    HAL_TIM_Base_Start(&htim4);  //adc timer
+    htim2.Init.Period = (200e6/ADC1_FREQ_SAMP);
+    if (HAL_TIM_Base_Init(&htim2) != HAL_OK) {
+        APP_ERROR("timer2 init error\r\n");
+    }
+    
+    HAL_TIM_Base_Start(&htim2);  //adc1 timer
 }
 
 /******************* (C) COPYRIGHT 2019 hxdyxd *****END OF FILE****/
