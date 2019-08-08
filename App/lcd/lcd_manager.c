@@ -36,7 +36,7 @@ void gui_init(void)
     
     UG_DriverRegister(DRIVER_FILL_FRAME, (void *)lcd240x240_fill);
     
-    UG_ConsoleSetArea(0, 120, 240-1, 240-1);
+    UG_ConsoleSetArea(0, 128 + 14, 240-1, 240-1);
     UG_FontSelect ( &FONT_8X14 );
     UG_ConsoleSetBackcolor ( C_BLACK );
     UG_ConsoleSetForecolor ( C_WHITE );
@@ -133,7 +133,9 @@ void gui_wave_draw(struct lcd_wave_t **hwavs, uint8_t num)
                     lcd240x240_drawpoint(j, i, hwavs[0]->color);
                 } else if(hwavs[1]->buffer[j] == i || hwavs[1]->buffer[j] == 1+i) {
                     lcd240x240_drawpoint(j, i, hwavs[1]->color);
-                } else if(i%30 == 0 || j%30 == 0 || j == hwav->width-1 || i == hwav->height-1) {
+                } else if(hwavs[2]->buffer[j] == i || hwavs[2]->buffer[j] == 1+i) {
+                    lcd240x240_drawpoint(j, i, hwavs[2]->color);
+                }else if(i%30 == 0 || j%30 == 0 || j == hwav->width-1 || i == hwav->height-1) {
                     lcd240x240_drawpoint(j, i, C_GRAY);
                 } else {
                     lcd240x240_drawpoint(j, i, hwav->bgcolor);

@@ -13,7 +13,7 @@
 #include "soft_timer.h"
 #include "lcd_manager.h"
 #include "AD9833.h"
-
+#include "math.h"
 
 void user_system_setup(void)
 {
@@ -26,9 +26,10 @@ void user_system_setup(void)
 
 static uint8_t buffer_wave_1[240];
 static uint8_t buffer_wave_2[240];
-static struct lcd_wave_t gwav1, gwav2;
-static struct lcd_wave_t *gwavs[2] = {
-    &gwav1, &gwav2, 
+static uint8_t buffer_wave_3[240];
+static struct lcd_wave_t gwav1, gwav2, gwav3;
+static struct lcd_wave_t *gwavs[3] = {
+    &gwav1, &gwav2, &gwav3, 
 };
 
 
@@ -47,6 +48,7 @@ uint16_t dma_buf_div1[FFT_LENGTH];
 uint16_t dma_buf_div2[FFT_LENGTH];
 uint16_t dma_buf_tmp[FFT_LENGTH];
 
+float gs_base_freq_hz = 0;
 float gs_base_amp = 0;
 
 void adc3_receive_proc(int id, void *pbuf, int len)
@@ -94,9 +96,10 @@ void adc3_receive_proc(int id, void *pbuf, int len)
         float base_freq_hz  = FFT_INDEX_TO_FREQ(base_freq, ADC1_FREQ_SAMP);   //转化为真实频率
         float base_amp = FFT_ASSI(abs_outputbuf[base_freq]);
         
+        gs_base_freq_hz = base_freq_hz;
         TIMER_TASK(timer2, 10, 1) {
             gs_base_amp = ADC_12BIT_VOLTAGE_GET(base_amp);
-            gui_wave_set(&gwav2, EASY_LR(gs_base_amp, 0, 0, 0.5, 120.0), C_ORANGE);
+            gui_wave_set(&gwav3, EASY_LR(gs_base_amp, 0, 0, 0.5, 120.0), C_ORANGE);
         }
         
         TIMER_TASK(timer3, 1000, 1) {
@@ -113,6 +116,10 @@ void adc3_receive_proc(int id, void *pbuf, int len)
 }
 
 
+#define F_START_FREQ (100)
+#define F_END_FREQ   (400000)
+#define F_COUNTER    (240)
+
 
 #define FS_STOP         (0)
 #define FS_START        (1)
@@ -120,35 +127,46 @@ void adc3_receive_proc(int id, void *pbuf, int len)
 #define FS_DETECTED     (3)
 
 uint8_t freq_scan_status = FS_STOP;
-static uint32_t cur_freq_set = 0;
+static float cur_freq_set = 0;
+static int freq_point = 0;
+static uint32_t real_freq = 0;
+
 
 void freq_scan_proc(void)
 {
-    static uint32_t start_freq_set = 500;
     
     switch(freq_scan_status) {
     case FS_START:
-        cur_freq_set = start_freq_set;
-        setWave(SINE, cur_freq_set);
-        soft_timer_create(SOFT_TIMER_FREQSCAN_ID, 1, 0, freq_scan_proc, 10);
-        APP_DEBUG("start freq scan, cur_freq_set = %d\r\n", cur_freq_set);
+        freq_point = 0;
+        cur_freq_set = log10(F_START_FREQ);
+        real_freq = pow(10, cur_freq_set);
+        setWave(SINE, real_freq);
+        soft_timer_create(SOFT_TIMER_FREQSCAN_ID, 1, 0, freq_scan_proc, 20);
+        APP_DEBUG("start freq scan, cur_freq_set = %dHz\r\n", real_freq);
+        lcd_printf("[%d] freq = %dHz\n", freq_point, real_freq);
         freq_scan_status = FS_NOT_DETECT;
         break;
     case FS_NOT_DETECT:
-        if(cur_freq_set >= 300000 || 0) {
-            freq_scan_status = FS_DETECTED;
+        freq_point++;
+        if(freq_point >= F_COUNTER || cur_freq_set >= log10(F_END_FREQ) || 0) {
+            APP_DEBUG("[%d] success freq scan, %d\r\n", freq_point, real_freq);
+            lcd_printf("[%d] scan success\n", freq_point);
+            freq_scan_status = FS_STOP;
+            return;
         }
-        cur_freq_set += 1000;
-        setWave(SINE, cur_freq_set);
-        soft_timer_create(SOFT_TIMER_FREQSCAN_ID, 1, 0, freq_scan_proc, 10);
-        APP_DEBUG("start freq scan, cur_freq_set = %d\r\n", cur_freq_set);
+        cur_freq_set += (log10(F_END_FREQ) - log10(F_START_FREQ))/F_COUNTER;
+        real_freq = pow(10, cur_freq_set);
+        setWave(SINE, real_freq);
+        soft_timer_create(SOFT_TIMER_FREQSCAN_ID, 1, 0, freq_scan_proc, 20);
+        APP_DEBUG("[%d] run freq scan, cur_freq_set = %dHz\r\n", freq_point, real_freq);
+        lcd_printf("[%d] freq = %dHz\n", freq_point, real_freq);
         break;
-    case FS_DETECTED:
-        APP_DEBUG("success freq scan, cur_freq_set = %d\r\n", cur_freq_set);
-        freq_scan_status = FS_STOP;
+    default:
+        APP_DEBUG("default ?\r\n");
         break;
     }
-    gui_wave_set(&gwav1, EASY_LR(cur_freq_set, 0, 0, 300000, 120.0), C_MAGENTA);
+    gui_wave_set(&gwav1, EASY_LR(real_freq, 0, 0, F_END_FREQ, 120.0), C_MAGENTA);
+    gui_wave_set(&gwav2, EASY_LR(gs_base_freq_hz, F_END_FREQ, 0, 0, 120.0), C_BLUE);
 }
 
 
@@ -195,10 +213,10 @@ void led_debug_proc(void)
     
     
     TIMER_TASK(timer0, 500, 1) {
-        lcd_printf("DDS FREQ = %.1f, AMP = %d\n", dds_output_freq, dds_output_amp);
+        lcd_printf("DDS F %.1f, A %d\n", dds_output_freq, dds_output_amp);
         TIMER_TASK(timer0, 1000, 1) {
             static uint32_t last_timer = 0;
-            lcd_printf("fps: %d\n", fps_inc*1000/(hal_read_TickCounter() - last_timer) );
+            APP_DEBUG("fps: %d\r\n", fps_inc*1000/(hal_read_TickCounter() - last_timer) );
             fps_inc = 0;
             last_timer = hal_read_TickCounter();
         }
@@ -216,11 +234,11 @@ void key_inout_receive_proc(int8_t id)
     
     switch(id) {
     case 0:
-        dds_output_amp++;
+        dds_output_amp+=3;
         AD9833_AmpSet(dds_output_amp);
         break;
     case 1:
-        dds_output_amp--;
+        dds_output_amp-=3;
         AD9833_AmpSet(dds_output_amp);
         break;
     case 2:
@@ -266,6 +284,7 @@ void user_setup(void)
     
     gui_wave_init(&gwav1, 0, 0, 240, 120, buffer_wave_1, C_BLACK);
     gui_wave_init(&gwav2, 0, 0, 240, 120, buffer_wave_2, C_BLACK);
+    gui_wave_init(&gwav3, 0, 0, 240, 120, buffer_wave_3, C_BLACK);
     
     printf("init success!\r\n");
 }
@@ -285,12 +304,29 @@ void user_loop(void)
         }
     }
     
-    TIMER_TASK(timer2_1, 100, 1) {
-        gui_wave_draw(gwavs, 2);
+    TIMER_TASK(timer2, 100, 1) {
+        gui_wave_draw(gwavs, 3);
 
-        ug_printf(0, 0, C_MAGENTA, "FREQ %.1fkHz", cur_freq_set/1000.0);
-        ug_printf(0, 14, C_ORANGE, "FREQ %.1fmV", gs_base_amp*1000);
+        ug_printf(0, 0, C_MAGENTA, "FREQ %.1fkHz", real_freq/1000.0);
+        ug_printf(0, 14, C_BLUE, "FREQ %.1fkHz", gs_base_freq_hz/1000.0);
+        ug_printf(0, 28, C_ORANGE, "Amp %.1fmV", gs_base_amp*1000);
         ug_printf(0, 128 - 20, C_LIGHT_CYAN, "T'D 300ms");
+        TIMER_TASK(timer2_1, 1000, 1) {
+            UG_FontSelect ( &FONT_6X10 );
+            for(int i=0; i<240; i++) {
+                if(i%30 == 0) {
+                    float showfreq = log10(F_START_FREQ) + i*(log10(F_END_FREQ) - log10(F_START_FREQ))/F_COUNTER;
+                    showfreq = pow(10, showfreq);
+                    if(showfreq >= 1000) {
+                        ug_printf(i, 128, C_LIGHT_CYAN, "%.0fk", showfreq/1000);
+                    } else {
+                        ug_printf(i, 128, C_LIGHT_CYAN, "%.0f", showfreq);
+                    }
+                    
+                }
+            }
+            UG_FontSelect ( &FONT_8X14 );
+        }
     }
     
     /* real time task */
