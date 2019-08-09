@@ -7,18 +7,22 @@
 #include "data_interface_hal.h"
 
 extern char lcd_console_buffer[512];
+extern uint8_t lcd_console_enable;
+
 
 #define lcd_printf(...)  do {\
+if(lcd_console_enable) {\
 snprintf(lcd_console_buffer, sizeof(lcd_console_buffer), __VA_ARGS__);\
 UG_ConsolePutString(lcd_console_buffer);\
+}\
 }while(0)
+
 
 #define ug_printf(x,y,c,...)  do {\
 snprintf(lcd_console_buffer, sizeof(lcd_console_buffer), __VA_ARGS__);\
 UG_SetForecolor(c);\
 UG_PutString(x, y, lcd_console_buffer);\
 }while(0)
-
 
 
 

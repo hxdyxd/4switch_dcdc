@@ -7,7 +7,7 @@
 
 
 char lcd_console_buffer[512];
-
+uint8_t lcd_console_enable = 0;
 
 
 void window1callback(UG_MESSAGE *msg)

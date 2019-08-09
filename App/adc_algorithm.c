@@ -67,14 +67,18 @@ void polyfit1(float *x, float *y, uint16_t num, double *output_k, double *output
 /*
  * 采样校准参数
  */
-#define PARA_NUM   (2)
+#define PARA_NUM   (4)
 
-float param_x_val[PARA_NUM] = {
-    0.391, 0.828, 
+float param_x_val[ADC1_CHANNEL_NUMBER][PARA_NUM] = {
+    {185.8, 130.6, 94.4, 38.6},
+    {220.6, 187.0, 119, 65.2},
+    {193.1, 160.1, 115.7, 82.7},
 };
 
-float param_y_val[PARA_NUM] = { 
-    0.439, 0.874,
+float param_y_val[ADC1_CHANNEL_NUMBER][PARA_NUM] = { 
+    {16.81, 11.81, 8.5, 3.52},
+    {17.06, 14.43, 9.27, 5.09},
+    {2137, 1780, 1289, 909},
 };
 
 
@@ -83,14 +87,14 @@ struct param_t gs_para[ADC1_CHANNEL_NUMBER];
 void param_default_value_init(void)
 {
     for(int i=0; i<ADC1_CHANNEL_NUMBER; i++) {
-        polyfit1(param_x_val, param_y_val, PARA_NUM, &gs_para[i].k, &gs_para[i].b);
+        polyfit1(param_x_val[i], param_y_val[i], PARA_NUM, &gs_para[i].k, &gs_para[i].b);
         printf("ch %d k: %.3f, b: %.3f\r\n", i, gs_para[i].k, gs_para[i].b);
     }
 }
 
-inline float get_param_value(float input, int i)
+inline float get_param_value(float input, int channel)
 {
-    return (input * gs_para[i].k) + gs_para[i].b;
+    return (input * gs_para[channel].k) + gs_para[channel].b;
 }
 
 /*******************************************************/

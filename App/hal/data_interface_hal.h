@@ -20,7 +20,7 @@
 #include "hal32_adc.h"
 #include "lcd240x240.h"
 #include "key_inout.h"
-
+#include "i2c.h"
 
 
 //UART

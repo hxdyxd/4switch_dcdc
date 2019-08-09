@@ -23,6 +23,7 @@ static void flash_init(void)
     qspi_flash_device_id();
     
     qspi_flash_enable_qe();
+    //qspi_flash_memory_maped();
     qspi_flash_memory_maped_by_qspi();
 }
 
@@ -40,6 +41,7 @@ void data_interface_hal_init(void)
     hal32_adc_init();
     
     HAL_TIM_Encoder_Start(&htim3, TIM_CHANNEL_ALL);
+    HAL_TIM_Base_Start(&htim15);  //dac timer
     
     
     lcd240x240_init();

@@ -10,7 +10,7 @@
 
 
 #define  KEY_TIMEOUT   (50)
-#define KEY_IO_OUT_NUM   (2)
+#define KEY_IO_OUT_NUM   (4)
 #define KEY_IO_IN_NUM    (4)
 
 #define KEY_IO_NUM  (KEY_IO_OUT_NUM + KEY_IO_IN_NUM)
@@ -31,14 +31,18 @@ struct tGpio KEY_4_4[KEY_IO_NUM] = {
         .GPIO_Pin = KO1_Pin,
     },
     {
+        .GPIOx = KO2_GPIO_Port,
+        .GPIO_Pin = KO2_Pin,
+    },
+    {
         .GPIOx = KO3_GPIO_Port,
         .GPIO_Pin = KO3_Pin,
     },
-    
     {
-        .GPIOx = KI0_GPIO_Port,
-        .GPIO_Pin = KI0_Pin,
+        .GPIOx = KO4_GPIO_Port,
+        .GPIO_Pin = KO4_Pin,
     },
+    
     {
         .GPIOx = KI1_GPIO_Port,
         .GPIO_Pin = KI1_Pin,
@@ -50,6 +54,10 @@ struct tGpio KEY_4_4[KEY_IO_NUM] = {
     {
         .GPIOx = KI3_GPIO_Port,
         .GPIO_Pin = KI3_Pin,
+    },
+    {
+        .GPIOx = KI4_GPIO_Port,
+        .GPIO_Pin = KI4_Pin,
     },
 };
 /********************************/

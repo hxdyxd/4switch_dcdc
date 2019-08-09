@@ -10,6 +10,7 @@
 #define ERR_LOG  APP_ERROR
 
 
+#if USE_TTS
 
 #define TTS_BUFFER_SIZE  (128)
 
@@ -24,6 +25,7 @@ static volatile uint8_t tts_underflow = 0;
 static struct __kfifo tts_fifo;
 
 
+char ttsgbuf[512];
 
 void tts_init(void)
 {
@@ -119,6 +121,6 @@ void tts_proc(void)
         APP_ERROR("start dac1 dma error\r\n");
     }
 }
+#endif
 
 /*****************************END OF FILE***************************/
-
