@@ -48,11 +48,21 @@ struct adc_adjustment_t
 extern struct adc_adjustment_t value_adc_adjustment_key[ADC1_CHANNEL_NUMBER];
 
 
+
 struct param_t
 {
     double k;
     double b;
 };
+
+
+#define PARA_CHANNEL_NUMBER  (ADC1_CHANNEL_NUMBER+1)
+#define PARA_NUM   (10)
+extern struct param_t gs_para[PARA_CHANNEL_NUMBER];
+
+
+
+
 
 typedef struct {
     float kp;
@@ -71,6 +81,15 @@ typedef struct {
 //Linear regression
 #define  EASY_LR(x,x1,y1,x2,y2)                (((y2) - (y1))/((x2) - (x1))*((x) - (x1)) + (y1))
 
+
+/*******************************************************************************
+* Function Name  : polyfit1.
+* Description    : set the original voltage or current values
+* Input          : None.
+* Output         : None.
+* Return         : None.
+*******************************************************************************/
+void polyfit1(float *x, float *y, uint16_t num, double *output_k, double *output_b);
 
 /*******************************************************************************
 * Function Name  : value_adc_adjustment.
@@ -98,6 +117,24 @@ char *value_adc_info(int id);
 * Return         : None.
 *******************************************************************************/
 void param_default_value_init(void);
+
+/*******************************************************************************
+* Function Name  : param_value_reset.
+* Description    : 
+* Input          : None.
+* Output         : None.
+* Return         : None.
+*******************************************************************************/
+void param_value_reset(float *x, float *y, int channel);
+
+/*******************************************************************************
+* Function Name  : param_value_save.
+* Description    : 
+* Input          : None.
+* Output         : None.
+* Return         : None.
+*******************************************************************************/
+void param_value_save(void);
 
 /*******************************************************************************
 * Function Name  : get_param_value.

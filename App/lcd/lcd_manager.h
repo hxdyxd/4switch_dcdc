@@ -12,14 +12,16 @@ extern uint8_t lcd_console_enable;
 
 #define lcd_printf(...)  do {\
 if(lcd_console_enable) {\
-snprintf(lcd_console_buffer, sizeof(lcd_console_buffer), __VA_ARGS__);\
+int len = snprintf(lcd_console_buffer, sizeof(lcd_console_buffer), __VA_ARGS__);\
+lcd_console_buffer[len] = '\0';\
 UG_ConsolePutString(lcd_console_buffer);\
 }\
 }while(0)
 
 
 #define ug_printf(x,y,c,...)  do {\
-snprintf(lcd_console_buffer, sizeof(lcd_console_buffer), __VA_ARGS__);\
+int len = snprintf(lcd_console_buffer, sizeof(lcd_console_buffer), __VA_ARGS__);\
+lcd_console_buffer[len] = '\0';\
 UG_SetForecolor(c);\
 UG_PutString(x, y, lcd_console_buffer);\
 }while(0)

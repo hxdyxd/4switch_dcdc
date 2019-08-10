@@ -135,10 +135,10 @@ int main(void)
   MX_TIM4_Init();
   MX_TIM2_Init();
   MX_SPI4_Init();
-  MX_I2C1_Init();
   MX_ADC3_Init();
   MX_TIM5_Init();
   MX_TIM8_Init();
+  MX_I2C4_Init();
   /* USER CODE BEGIN 2 */
   user_setup();
   /* USER CODE END 2 */
@@ -212,14 +212,14 @@ void SystemClock_Config(void)
   }
   PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_USART1|RCC_PERIPHCLK_SPI4
                               |RCC_PERIPHCLK_SPI2|RCC_PERIPHCLK_ADC
-                              |RCC_PERIPHCLK_I2C1|RCC_PERIPHCLK_QSPI
+                              |RCC_PERIPHCLK_I2C4|RCC_PERIPHCLK_QSPI
                               |RCC_PERIPHCLK_CKPER;
   PeriphClkInitStruct.QspiClockSelection = RCC_QSPICLKSOURCE_D1HCLK;
   PeriphClkInitStruct.CkperClockSelection = RCC_CLKPSOURCE_HSI;
   PeriphClkInitStruct.Spi123ClockSelection = RCC_SPI123CLKSOURCE_PLL;
   PeriphClkInitStruct.Spi45ClockSelection = RCC_SPI45CLKSOURCE_D2PCLK1;
   PeriphClkInitStruct.Usart16ClockSelection = RCC_USART16CLKSOURCE_D2PCLK2;
-  PeriphClkInitStruct.I2c123ClockSelection = RCC_I2C123CLKSOURCE_D2PCLK1;
+  PeriphClkInitStruct.I2c4ClockSelection = RCC_I2C4CLKSOURCE_D3PCLK1;
   PeriphClkInitStruct.AdcClockSelection = RCC_ADCCLKSOURCE_CLKP;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
   {

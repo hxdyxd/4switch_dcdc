@@ -2,6 +2,8 @@
 /* By hxdyxd */
 #include "adc_algorithm.h"
 #include <arm_math.h>
+#include "eeprom.h"
+
 
 /*
  * Hardware gain
@@ -67,33 +69,66 @@ void polyfit1(float *x, float *y, uint16_t num, double *output_k, double *output
 /*
  * 采样校准参数
  */
-#define PARA_NUM   (4)
 
-float param_x_val[ADC1_CHANNEL_NUMBER][PARA_NUM] = {
+float param_x_val[PARA_CHANNEL_NUMBER][PARA_NUM] = {
     {185.8, 130.6, 94.4, 38.6},
     {220.6, 187.0, 119, 65.2},
     {193.1, 160.1, 115.7, 82.7},
+    {193.1, 160.1, 115.7, 82.7},
 };
 
-float param_y_val[ADC1_CHANNEL_NUMBER][PARA_NUM] = { 
+float param_y_val[PARA_CHANNEL_NUMBER][PARA_NUM] = { 
     {16.81, 11.81, 8.5, 3.52},
     {17.06, 14.43, 9.27, 5.09},
+    {2137, 1780, 1289, 909},
     {2137, 1780, 1289, 909},
 };
 
 
-struct param_t gs_para[ADC1_CHANNEL_NUMBER];
+struct param_t gs_para[PARA_CHANNEL_NUMBER];
 
 void param_default_value_init(void)
 {
-    for(int i=0; i<ADC1_CHANNEL_NUMBER; i++) {
-        polyfit1(param_x_val[i], param_y_val[i], PARA_NUM, &gs_para[i].k, &gs_para[i].b);
-        printf("ch %d k: %.3f, b: %.3f\r\n", i, gs_para[i].k, gs_para[i].b);
+    
+    if(eeprom_read(0, (uint8_t *)&gs_para, sizeof(gs_para))) {
+        printf("eeprom_read ok\r\n");
+        for(int i=0; i<PARA_CHANNEL_NUMBER; i++) {
+            printf("ch %d k: %.3f, b: %.3f\r\n", i, gs_para[i].k, gs_para[i].b);
+        }
+    } else {
+        printf("eeprom_read error\r\n");
+        for(int i=0; i<PARA_CHANNEL_NUMBER; i++) {
+            polyfit1(param_x_val[i], param_y_val[i], PARA_NUM, &gs_para[i].k, &gs_para[i].b);
+            printf("ch %d k: %.3f, b: %.3f\r\n", i, gs_para[i].k, gs_para[i].b);
+        }
     }
 }
 
+void param_value_reset(float *x, float *y, int channel)
+{
+    if(channel >= PARA_CHANNEL_NUMBER) {
+        return;
+    }
+    polyfit1(x, y, PARA_NUM, &gs_para[channel].k, &gs_para[channel].b);
+    printf("ch %d k: %.3f, b: %.3f\r\n", channel, gs_para[channel].k, gs_para[channel].b);
+}
+
+
+void param_value_save(void)
+{
+    //todo...
+    printf("save param\r\n");
+    if(eeprom_write(0, (uint8_t *)&gs_para, sizeof(gs_para))) {
+        printf("eeprom_write ok %d\r\n", sizeof(gs_para) );
+    }
+}
+
+
 inline float get_param_value(float input, int channel)
 {
+    if(channel >= PARA_CHANNEL_NUMBER) {
+        return 0;
+    }
     return (input * gs_para[channel].k) + gs_para[channel].b;
 }
 
