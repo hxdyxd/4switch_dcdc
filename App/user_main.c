@@ -449,7 +449,7 @@ void fault_detection(void)
         mp_gain = outgain;
         fault_detection_static();
         if(!fault_static_point) {
-            setWave(SINE, 200);
+            setWave(SINE, 210);
         }
         
     }
@@ -539,8 +539,10 @@ void led_debug_proc(void)
              dds_output_freq += (int)point*1000;
         } else if(dds_output_freq >= 1000) {
             dds_output_freq += (int)point*100;
-        } else {
+        } else if(dds_output_freq >= 100) {
             dds_output_freq += (int)point*10;
+        } else {
+            dds_output_freq += (int)point;
         }
         if(dds_output_freq < 0.0) {
             dds_output_freq = 0;
