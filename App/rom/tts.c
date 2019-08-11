@@ -12,7 +12,7 @@
 
 #if USE_TTS
 
-#define TTS_BUFFER_SIZE  (128)
+#define TTS_BUFFER_SIZE  (256)
 
 
 extern int gbk_tts_table(uint16_t *word, unsigned char const **pbuf);
@@ -25,7 +25,7 @@ static volatile uint8_t tts_underflow = 0;
 static struct __kfifo tts_fifo;
 
 
-char ttsgbuf[512];
+char ttsgbuf[1024];
 
 void tts_init(void)
 {

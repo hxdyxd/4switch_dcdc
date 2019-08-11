@@ -19,7 +19,7 @@
 snprintf(ttsgbuf, sizeof(ttsgbuf), __VA_ARGS__);\
 tts_puts(ttsgbuf, strlen(ttsgbuf));\
 }while(0)
-extern char ttsgbuf[512];
+extern char ttsgbuf[1024];
 
 
 int tts_puts(char *str, int len);

@@ -44,10 +44,11 @@
 #define KEY_MODE_SWITCH_PAGE    (8)
 #define KEY_MODE_ADD            (9)
 #define KEY_MODE_OK             (10)
+#define KEY_MODE_SAVE           (11)
 
 /*4*/
 #define KEY_MODE_CONSOLE        (12)
-#define KEY_MODE_SAVE_KEY       (13)
+
 
 #define LCD_MODE_DEFAULT0       (0)
 #define LCD_MODE_FAULT          (1)

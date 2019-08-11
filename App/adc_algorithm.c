@@ -112,12 +112,12 @@ void param_default_value_init(void)
     }
 }
 
-void param_value_reset(float *x, float *y, int channel)
+void param_value_reset(float *x, float *y, int channel, uint8_t count)
 {
     if(channel >= PARA_CHANNEL_NUMBER) {
         return;
     }
-    polyfit1(x, y, PARA_NUM, &gs_para[channel].k, &gs_para[channel].b);
+    polyfit1(x, y, count, &gs_para[channel].k, &gs_para[channel].b);
     printf("ch %d k: %.3f, b: %.3f\r\n", channel, gs_para[channel].k, gs_para[channel].b);
 }
 
@@ -255,7 +255,7 @@ float pid_ctrl(pidc_t *pid, float curval)
 /*
  * ADC去极值平均滤波器
 */
-uint16_t No_Max_Min_Filter(uint16_t *in_dat, uint16_t num, uint8_t channel_num, uint8_t n)
+uint16_t no_max_min_filter_uint16_mult(uint16_t *in_dat, uint16_t num, uint8_t channel_num, uint8_t n)
 {
     int i;
     uint32_t sum = 0;
@@ -278,6 +278,35 @@ uint16_t No_Max_Min_Filter(uint16_t *in_dat, uint16_t num, uint8_t channel_num, 
     sum_f = (float)sum / (num - 2.0);
     return (uint16_t)sum_f;
 }
+
+
+/*
+ * ADC去极值平均滤波器
+*/
+float no_max_min_filter_float(float *in_dat, uint16_t num)
+{
+    int i;
+    float sum = 0;
+    float sum_f;
+    float max_value, min_value;
+    max_value = in_dat[0];
+    min_value = in_dat[0];
+
+    for(i=0; i<num; i++){
+        if(in_dat[i] > max_value){
+            max_value = in_dat[i];
+        }
+        if(in_dat[i] < min_value){
+            min_value = in_dat[i];
+        }
+        sum += in_dat[i];
+    }
+    sum -= max_value;
+    sum -= min_value;
+    sum_f = (float)sum / (num - 2.0);
+    return sum_f;
+}
+
 
 
 /*****************************END OF FILE***************************/

@@ -22,9 +22,6 @@ void user_system_setup(void)
 
 }
 
-#define  FREQ_SCAN           (0)
-#define  FREQ_SCAN_START     (1)
-
 
 static uint8_t buffer_wave_1[240];
 static uint8_t buffer_wave_2[240];
@@ -36,7 +33,6 @@ static struct lcd_wave_t *gwavs[3] = {
 static uint8_t wave_on = 0;
 
 
-uint8_t mode_run = 0;
 
 
 uint8_t dds_output_amp = 100;
@@ -53,15 +49,13 @@ float gs_base_freq_hz[ADC1_CHANNEL_NUMBER] = {0};
 float gs_base_amp[ADC1_CHANNEL_NUMBER] = {0};
 float gs_zero_val[ADC1_CHANNEL_NUMBER]= {0};
 
-float gs_base_amp_sum_20[ADC1_CHANNEL_NUMBER] = {0};
-float gs_base_amp_avg_20[ADC1_CHANNEL_NUMBER] = {0};
-uint32_t gs_base_amp_avg_20_cnt = 0;
 
+#define  BASE_AMP_AVG_NUMBER    (10)
+float gs_base_amp_avg[ADC1_CHANNEL_NUMBER] = {0};
 
 static float value_base_amp[ADC1_CHANNEL_NUMBER + 1] = {0};
 static float value_base_amp_fast[ADC1_CHANNEL_NUMBER] = {0};
 
-float vpp_value[ADC1_CHANNEL_NUMBER] = {0};
 
 
 
@@ -84,7 +78,7 @@ void adc3_receive_proc(int id, int channel, void *pbuf, int len)
         flag++;
         if(flag >= 244) {
             flag = 0;
-            APP_DEBUG("adc 1s \r\n");
+            printf("adc 1s \r\n");
         }
         
         for(int i=0; i<FFT_LENGTH; i++) {
@@ -118,92 +112,53 @@ void adc3_receive_proc(int id, int channel, void *pbuf, int len)
             gs_base_freq_hz[i]  = FFT_INDEX_TO_FREQ(base_freq, ADC1_FREQ_SAMP);   //转化为真实频率
             gs_base_amp[i] = ADC_12BIT_VOLTAGE_GET(FFT_ASSI(abs_outputbuf[base_freq]));
             
-            value_base_amp_fast[i] = get_param_value(gs_base_amp_avg_20[i], i);
+            value_base_amp_fast[i] = get_param_value(gs_base_amp[i], i);
         }
         
-        if(gs_base_freq_hz[1] > 50000.0) {
+        if(gs_base_freq_hz[1] > 35000.0) {
             outgain_fast =  (1.0842 * value_base_amp_fast[CHANNEL_OUT] -154.1335)/ ( 0.4243 *value_base_amp_fast[CHANNEL_IN2] + 3.6967);
         } else {
             outgain_fast = value_base_amp_fast[CHANNEL_OUT]/value_base_amp_fast[CHANNEL_IN2];
         }
         
         
-        if(gs_base_amp_avg_20_cnt >= 10) {
-            gs_base_amp_avg_20_cnt = 0;
+        {
+            static float gs_base_amp_near[ADC1_CHANNEL_NUMBER][BASE_AMP_AVG_NUMBER] = {0};
+            static uint32_t gs_base_amp_avg_cnt = 0;
             for(int i=0; i<ADC1_CHANNEL_NUMBER; i++) {
-                gs_base_amp_avg_20[i] = gs_base_amp_sum_20[i]/20.0;
-                gs_base_amp_sum_20[i] = 0;
-                //校准
-//                vpp_value[i] = gs_base_amp[i]*10;
-//                printf("%d %.3f\r\n", i, gs_base_amp[i]*10 );
-//                
-                value_base_amp[i] = get_param_value(gs_base_amp_avg_20[i], i);
-                if(i == CHANNEL_OUT) {
-                    value_base_amp[CHANNEL_OUT_LOAD] = get_param_value(gs_base_amp_avg_20[i], i+1);
-                }
-                rin = 2000*(value_base_amp[1])/(value_base_amp[0] - value_base_amp[1]);
+                gs_base_amp_near[i][gs_base_amp_avg_cnt] = gs_base_amp[i];
                 
-                if(gs_base_freq_hz[1] > 50000.0) {
+                //no max min filter
+                gs_base_amp_avg[i] = no_max_min_filter_float(gs_base_amp_near[i], BASE_AMP_AVG_NUMBER);
+                
+                //get real value
+                value_base_amp[i] = get_param_value(gs_base_amp_avg[i], i);
+                if(i == CHANNEL_OUT) {
+                    value_base_amp[CHANNEL_OUT_LOAD] = get_param_value(gs_base_amp_avg[i], i+1);
+                }
+                
+                //get input resister
+                rin = 2000*(value_base_amp[1])/(value_base_amp[0] - value_base_amp[1]);
+                if(gs_base_freq_hz[1] > 35000.0) {
                     outgain =  (1.0842 * value_base_amp[CHANNEL_OUT] -154.1335)/ ( 0.4243 *value_base_amp[CHANNEL_IN2] + 3.6967);
                 } else {
                     outgain = value_base_amp[CHANNEL_OUT]/value_base_amp[CHANNEL_IN2];
                 }
             }
-        } else {
-            for(int i=0; i<ADC1_CHANNEL_NUMBER; i++) {
-                gs_base_amp_sum_20[i] += gs_base_amp[i];
-            }
-            gs_base_amp_avg_20_cnt++;
-        }
-        
-        
-        TIMER_TASK(timer2, 10, 1) {
-            //gui_wave_set(&gwav3, EASY_LR(gs_base_amp[0], 0, 0, 0.5, 120.0), C_ORANGE);
-        }
-        
-        
-        TIMER_TASK(timer3, 1000, 1) {
-            for(int i=0; i<ADC1_CHANNEL_NUMBER; i++) {
-                APP_DEBUG( "[%d] zero_val = (%.1f) %.1fmV \r\n", i, gs_zero_val[i], ADC_12BIT_VOLTAGE_GET(gs_zero_val[i])*1000 );
-                APP_DEBUG("[%d] base_freq_hz = %.1f, vpp = %.1fmV\r\n", i, gs_base_freq_hz[i], gs_base_amp[i]*1000);
-                
-                APP_DEBUG("avg20: %.1fmV, real: %.3fmV \r\n", gs_base_amp_avg_20[i]*1000, value_base_amp[i]);
-                if(i==1) {
-                    printf("real: %.3fmV\r\n", 0.4243 * value_base_amp[i]  + 3.6967);
-                }
-            }
-            
-            APP_DEBUG("RI: %.1f\r\n", rin );
-            APP_DEBUG("GAIN: %.1f %.1f\r\n", outgain , outgain_fast);
-            
-            
-            static uint32_t last_timer = 0;
-            APP_DEBUG("FFT CNT: %d\r\n", fft_cnt*1000/(hal_read_TickCounter() - last_timer) );
-            fft_cnt = 0;
-            last_timer = hal_read_TickCounter();
+            gs_base_amp_avg_cnt = (gs_base_amp_avg_cnt + 1) % BASE_AMP_AVG_NUMBER;
         }
         
     }
     
     if(id == 3) {
-        float sum = 0;
-        uint16_t max_val = 0;
-        uint16_t min_val = 65535;
-        for(int i=0; i<ADC3_CONV_NUMBER; i++) {
-            if(adc_data[i] < min_val) {
-                min_val = adc_data[i];
-            }
-            if(adc_data[i] > max_val) {
-                max_val = adc_data[i];
-            }
-        }
-        gs_vout_dc = ADC_16BIT_VOLTAGE_GET((max_val+min_val)/2)*1000*4.3;
+        gs_vout_dc = no_max_min_filter_uint16_mult(adc_data, ADC3_CONV_NUMBER, ADC3_CHANNEL_NUMBER, 0);
+        gs_vout_dc = ADC_16BIT_VOLTAGE_GET(gs_vout_dc)*1000*4.3;
     }
 }
 
 
 #define F_START_FREQ (200)
-#define F_END_FREQ   ((int)ADC1_FREQ_SAMP)
+#define F_END_FREQ   ((int)ADC1_FREQ_SAMP/2)
 #define F_COUNTER    (240)
 
 
@@ -220,7 +175,9 @@ static float cur_freq_set = 0;
 static int freq_point = 0;
 static uint32_t real_freq = 0;
 static float up_freq = 0;
+static float lp_freq = 0;
 static uint8_t up_freq_find = 0;
+static uint8_t lp_freq_find = 0;
 static float gain_1k = 0;
 
 
@@ -231,12 +188,18 @@ void freq_scan_proc(void)
     case FS_START:
         //记录初始增益
         up_freq_find = 0;
+        lp_freq_find = 0;
         setWave(SINE, 1000);
-        soft_timer_create(SOFT_TIMER_FREQSCAN_ID, 1, 0, freq_scan_proc, 400);
+        for(int i=0; i<240; i++) {
+            gui_wave_set(&gwav1, 0, C_GREEN);
+            gui_wave_set(&gwav2, 0, C_BLUE);
+            gui_wave_set(&gwav3, 0, C_ORANGE);
+        }
+        soft_timer_create(SOFT_TIMER_FREQSCAN_ID, 1, 0, freq_scan_proc, 300);
         freq_scan_status = FS_START_SCAN;
     case FS_START_SCAN:
         //使用精确增益
-        gain_1k = outgain_fast / 1.41421;
+        gain_1k = outgain / 1.41421;
         APP_DEBUG("start freq scan, set 1k, gain = %.1f\r\n", gain_1k);
         
         //开始扫频
@@ -253,7 +216,8 @@ void freq_scan_proc(void)
         break;
     case FS_NOT_DETECT:
         //扫频中
-        gui_wave_set(&gwav2, EASY_LR(0, F_END_FREQ, 0, gs_base_freq_hz[CHANNEL_IN2], 120.0), C_BLUE);
+    gui_wave_set(&gwav1, EASY_LR( ((up_freq_find == 0)&&(lp_freq_find == 1))?(gain_1k):(0), 0, 0, 300, 120.0), C_GREEN);
+        gui_wave_set(&gwav2, EASY_LR(gs_base_freq_hz[CHANNEL_IN2], F_START_FREQ, 0, F_END_FREQ, 120.0), C_BLUE);
         gui_wave_set(&gwav3, EASY_LR(outgain_fast, 0, 0, 300, 120.0), C_ORANGE);
         
         freq_point++;
@@ -268,10 +232,15 @@ void freq_scan_proc(void)
         
         if(outgain_fast <= gain_1k && real_freq > 10000) {
             up_freq_find = 1;
-            tts_printf("上限频率%d", (int)up_freq);
+            tts_printf("上限频率%.1f千赫兹", (up_freq/1000));
+        } else if(outgain_fast >= gain_1k) {
+            lp_freq_find = 1;
         }
         if(!up_freq_find) {
             up_freq = real_freq;
+        }
+        if(!lp_freq_find) {
+            lp_freq = real_freq;
         }
         cur_freq_set += (log10(F_END_FREQ) - log10(F_START_FREQ))/F_COUNTER;
         real_freq = pow(10, cur_freq_set);
@@ -365,14 +334,12 @@ static uint8_t fault_id_temp = 0;
 static uint8_t fault_id = 0;
 
 static uint8_t fault_static_point = 0;
-static uint8_t fault_detection_status = FD_START;
 
 static float mp_gain = 0;
 static float up_gain = 0;
 static float lp_gain = 0;
 //
 static uint8_t up_fault_counter = 0;
-static uint8_t up2_fault_counter = 0;
 static uint8_t lp_fault_counter = 0;
 static float rin_1k = 0;
 
@@ -388,7 +355,7 @@ void fault_detection_static(void)
 {
     rin_1k = rin;
     if(gs_vout_dc >= 9000) {
-        if(rin >= 9000) {
+        if(rin >= 12000) {
             fault_id_temp = R1_OC;
         } else if(rin >= 4000) {
             fault_id_temp = R4_OC;
@@ -401,14 +368,17 @@ void fault_detection_static(void)
                 fault_id_temp = R2_SC;
             }
         }
-    } else if(gs_vout_dc <= 5000 && gs_vout_dc >= 1000 && rin <= 600) {
+    } else if(gs_vout_dc <= 5000 && gs_vout_dc >= 1000 && rin <= 600 && rin > 0) {
         fault_id_temp = R2_OC;
-    } else if(gs_vout_dc <= 1000 && rin <= 600) {
-        fault_id_temp = R3_OC;
-        //fault_id = R4_SC;
-    } else if(gs_vout_dc >= 5000 && gs_vout_dc <= 9000 && rin > 12000) {
+    } else if(gs_vout_dc <= 1000 && rin <= 600 && rin > 0) {
+        if( rin > 140) {
+            fault_id_temp = R3_OC;
+        } else {
+            fault_id_temp = R4_SC;
+        }
+    } else if(gs_vout_dc >= 5000 && gs_vout_dc <= 9000 && (rin > 12000 || rin < 0)) {
         fault_id_temp = C1_OC;
-    } else if(gs_vout_dc >= 5000 && gs_vout_dc <= 9000 && rin >= 4000 && rin <= 8000) {
+    } else if(gs_vout_dc >= 5000 && gs_vout_dc <= 9000 && rin >= 4000 && rin <= 12000) {
         fault_id_temp = C2_OC;
     } else {
         fault_id_temp = 0;
@@ -449,19 +419,22 @@ void fault_detection(void)
             up_gain = outgain;
             
             //HF
-            if(up_gain > 50) {
+            if(up_gain > 115) {
                 
                 up_fault_counter++;
-                if(up_fault_counter >= 2) {
+                if(up_fault_counter >= 2 && gs_vout_dc >= 5000 && gs_vout_dc <= 9000) {
                     up_fault_counter = 0;
                     fault_id = C3_OC;
                 }
-            } else if(up_gain < 30) {
+            } else if(up_gain < 75) {
                 up_fault_counter++;
                 
-                if(up_fault_counter >= 2) {
+                if(up_fault_counter >= 2 && gs_vout_dc >= 5000 && gs_vout_dc <= 9000) {
+                    up_fault_counter = 0;
                     fault_id = C3_SC;
                 }
+            } else {
+                up_fault_counter = 0;
             }
         }
         
@@ -490,7 +463,7 @@ void fault_detection(void)
             
             //LF
             
-            if(lp_gain > 120) {
+            if(lp_gain > 105) {
                 
                 lp_fault_counter++;
                 
@@ -498,6 +471,8 @@ void fault_detection(void)
                     lp_fault_counter = 0;
                     fault_id = C2_SC;
                 }
+            } else {
+                lp_fault_counter = 0;
             }
             
         }
@@ -530,19 +505,26 @@ uint8_t gs_lcd_mode = LCD_MODE_DEFAULT0;
 /**cal**/
 uint8_t gs_lcd_cal_index = 0;
 uint8_t gs_lcd_cal_ch = 0;
-float gs_para_y_div[PARA_CHANNEL_NUMBER][PARA_NUM] = {
-    {20.5, 18.5, 17.5, 15.5, 14.5, 12.5, 10.5, 8.5, 5.5, 3.5}, //VIN1
-    {11.5, 10.5, 9.5,  8.5,   7.5,  6.5,  5.5, 4.5, 3.5, 2.5}, //VIN2
-    {2005, 1805, 1705, 1505, 1405, 1205, 1005, 805, 505, 305},  //VOUT
-    {2005, 1805, 1705, 1505, 1405, 1205, 1005, 805, 505, 305},  //VOUT_LOAD
-};
+//float gs_para_y_div[PARA_CHANNEL_NUMBER][PARA_NUM] = {
+//    {20.5, 18.5, 17.5, 15.5, 14.5, 12.5, 10.5, 8.5, 5.5, 3.5}, //VIN1
+//    {11.5, 10.5, 9.5,  8.5,   7.5,  6.5,  5.5, 4.5, 3.5, 2.5}, //VIN2
+//    {2005, 1805, 1705, 1505, 1405, 1205, 1005, 805, 505, 305},  //VOUT
+//    {2005, 1805, 1705, 1505, 1405, 1205, 1005, 805, 505, 305},  //VOUT_LOAD
+//};
+float gs_para_y_div[PARA_NUM] = {0};
 float gs_para_x_div[PARA_NUM] = {0};
+
+
 
 void led_debug_proc(void)
 {
     
     LED_REV(LED0_BASE);
     
+    
+    INIT_TASK(init_tts) {
+        tts_printf("欢迎使用电路特性测试仪");
+    }
     
     /* encoder */
     short encoder_cnt = ENCODER_CNT;
@@ -571,7 +553,23 @@ void led_debug_proc(void)
         lcd_printf("SET DDS FREQ = %d\n", dds_output_freq);
     }
     /***********************************************/
-    
+    TIMER_TASK(timer3, 1000, 1) {
+        for(int i=0; i<ADC1_CHANNEL_NUMBER; i++) {
+            APP_DEBUG( "[%d] zero_val = (%.1f) %.1fmV \r\n", i, gs_zero_val[i], ADC_12BIT_VOLTAGE_GET(gs_zero_val[i])*1000 );
+            APP_DEBUG("[%d] base_freq_hz = %.1f, vpp = %.1fmV\r\n", i, gs_base_freq_hz[i], gs_base_amp[i]*1000);
+            
+            APP_DEBUG("real: %.3fmV \r\n", value_base_amp[i]);
+        }
+        
+        APP_DEBUG("RI: %.1f\r\n", rin );
+        APP_DEBUG("GAIN: %.1f %.1f\r\n", outgain , outgain_fast);
+        
+        
+        static uint32_t last_timer = 0;
+        APP_DEBUG("FFT CNT: %d\r\n", fft_cnt*1000/(hal_read_TickCounter() - last_timer) );
+        fft_cnt = 0;
+        last_timer = hal_read_TickCounter();
+    }
     
     TIMER_TASK(timer0, 500, (lcd_console_enable && !wave_on)) {
         lcd_printf("ZERO = %.1f\n", ADC_12BIT_VOLTAGE_GET(gs_zero_val[0]) );
@@ -584,7 +582,7 @@ void led_debug_proc(void)
         }
     }
     
-    TIMER_TASK(timer1, 500, (!wave_on && LCD_MODE_FAULT == gs_lcd_mode)) {
+    TIMER_TASK(timer1, 250, (!wave_on && LCD_MODE_FAULT == gs_lcd_mode)) {
         fault_detection();
     }
     
@@ -625,32 +623,47 @@ void led_debug_proc(void)
         case LCD_MODE_CHANNEL:
             ug_printf(0, 0 + 14, C_ORANGE, "Cal mode");
             ug_printf(0, 0 + 14 + 20, C_ORANGE, "Ch select, CH%d", gs_lcd_cal_ch);
-            if(gs_lcd_cal_ch == 0 || gs_lcd_cal_ch == 1) {
-                ug_printf(0, 0 + 14 + 40, C_ORANGE, "AMP:%duV", (int)(value_base_amp[gs_lcd_cal_ch]*1000));
-            } else {
-                ug_printf(0, 0 + 14 + 40, C_ORANGE, "AMP:%dmV", (int)value_base_amp[gs_lcd_cal_ch]);
-            }
-            break;
-        case LCD_MODE_CAL:
-            ug_printf(0, 0 + 14, C_ORANGE, "Cal mode, CH%d", gs_lcd_cal_ch);
-            ug_printf(0, 0 + 14 + 20, C_ORANGE, "[%d]set %.1fmV", gs_lcd_cal_index, gs_para_y_div[gs_lcd_cal_ch][gs_lcd_cal_index]);
-            ug_printf(0, 0 + 14 + 40, C_ORANGE, "ADC AMP:%.1fmV", gs_base_amp_avg_20[gs_lcd_cal_ch]*1000);
         
             if(gs_lcd_cal_ch == 0 || gs_lcd_cal_ch == 1) {
                 ug_printf(0, 0 + 14 + 60, C_ORANGE, "AMP:%duV", (int)(value_base_amp[gs_lcd_cal_ch]*1000));
+                ug_printf(0, 0 + 14 + 80, C_ORANGE, "RI: %d", (int)rin);
+                ug_printf(0, 0 + 14 + 100, C_ORANGE, "GAIN: %d", (int)outgain);
             } else {
                 ug_printf(0, 0 + 14 + 60, C_ORANGE, "AMP:%dmV", (int)value_base_amp[gs_lcd_cal_ch]);
+                ug_printf(0, 0 + 14 + 80, C_ORANGE, "GAIN: %d", (int)outgain);
+            }
+            break;
+        case LCD_MODE_CAL:
+            ug_printf(0, 0 + 14, C_RED, "Cal mode, CH%d", gs_lcd_cal_ch);
+            if(gs_lcd_cal_ch == 0 || gs_lcd_cal_ch == 1) {
+                ug_printf(0, 0 + 14 + 20, C_RED, "[%d]set %duV", gs_lcd_cal_index, (int)(gs_para_y_div[gs_lcd_cal_index]*1000));
+            } else {
+                ug_printf(0, 0 + 14 + 20, C_RED, "[%d]set %dmV", gs_lcd_cal_index, (int)gs_para_y_div[gs_lcd_cal_index]);
+            }
+            
+            ug_printf(0, 0 + 14 + 40, C_ORANGE, "ADC AMP:%.1fmV", gs_base_amp_avg[gs_lcd_cal_ch]*1000);
+            
+            if(gs_lcd_cal_ch == 0 || gs_lcd_cal_ch == 1) {
+                ug_printf(0, 0 + 14 + 60, C_RED, "AMP:%duV", (int)(value_base_amp[gs_lcd_cal_ch]*1000));
+                ug_printf(0, 0 + 14 + 80, C_ORANGE, "RI: %d", (int)rin);
+                ug_printf(0, 0 + 14 + 100, C_ORANGE, "GAIN: %d", (int)outgain);
+            } else {
+                ug_printf(0, 0 + 14 + 60, C_RED, "AMP:%dmV", (int)value_base_amp[gs_lcd_cal_ch]);
+                ug_printf(0, 0 + 14 + 80, C_ORANGE, "GAIN: %d", (int)outgain);
             }
             break;
         case LCD_MODE_CAL_OK:
             ug_printf(0, 0 + 14, C_ORANGE, "Cal mode, CH%d", gs_lcd_cal_ch);
             ug_printf(0, 0 + 14 + 20, C_GREEN, "OK SAVE?");
-            ug_printf(0, 0 + 14 + 40, C_GREEN, "ADC AMP:%.1fmV", gs_base_amp_avg_20[gs_lcd_cal_ch]*1000);
+            ug_printf(0, 0 + 14 + 40, C_GREEN, "ADC AMP:%.1fmV", gs_base_amp_avg[gs_lcd_cal_ch]*1000);
 
             if(gs_lcd_cal_ch == 0 || gs_lcd_cal_ch == 1) {
-                ug_printf(0, 0 + 14 + 60, C_ORANGE, "AMP:%duV", (int)(value_base_amp[gs_lcd_cal_ch]*1000));
+                ug_printf(0, 0 + 14 + 60, C_BLUE, "AMP:%duV", (int)(value_base_amp[gs_lcd_cal_ch]*1000));
+                ug_printf(0, 0 + 14 + 80, C_GREEN, "RI: %d", (int)rin);
+                ug_printf(0, 0 + 14 + 100, C_GREEN, "GAIN: %d", (int)outgain);
             } else {
-                ug_printf(0, 0 + 14 + 60, C_ORANGE, "AMP:%dmV", (int)value_base_amp[gs_lcd_cal_ch]);
+                ug_printf(0, 0 + 14 + 60, C_BLUE, "AMP:%dmV", (int)value_base_amp[gs_lcd_cal_ch]);
+                ug_printf(0, 0 + 14 + 80, C_ORANGE, "GAIN: %d", (int)outgain);
             }
             break;
         /*cal mode end*/
@@ -663,6 +676,13 @@ void led_debug_proc(void)
 }
 
 
+char *mode_string[LCD_MODE_NUMBER] = {
+    [0] = "测量模式",
+    [1] = "故障分析模式",
+    [2] = "参数校准模式",
+};
+
+
 void key_inout_receive_proc(int8_t id)
 {
     APP_DEBUG("KEY = %d \r\n", id);
@@ -670,9 +690,18 @@ void key_inout_receive_proc(int8_t id)
     wave_on = 0;
     switch(id) {
     case KEY_MODE_SWITCH_PAGE:
-        gs_lcd_mode++;
-        if(gs_lcd_mode >= LCD_MODE_NUMBER) {
-            gs_lcd_mode = 0;
+        if(gs_lcd_mode < LCD_MODE_NUMBER) {
+            if(gs_lcd_cal_ch == 1) {
+                //恢复频率
+                setWave(SINE, 1000);
+            }
+            gs_lcd_mode++;
+            if(gs_lcd_mode >= LCD_MODE_NUMBER) {
+                gs_lcd_mode = 0;
+            }
+            tts_printf("%s", mode_string[gs_lcd_mode]);
+        } else {
+            
         }
         break;
     case KEY_MODE_ADD:
@@ -683,6 +712,11 @@ void key_inout_receive_proc(int8_t id)
             if(gs_lcd_cal_ch >= PARA_CHANNEL_NUMBER) {
                 gs_lcd_cal_ch = 0;
             }
+            tts_printf("通道%d", gs_lcd_cal_ch);
+            break;
+        case LCD_MODE_CAL:
+            //快速逼近
+            gs_para_y_div[gs_lcd_cal_index] = value_base_amp[gs_lcd_cal_ch];
             break;
         default:
             break;
@@ -694,13 +728,15 @@ void key_inout_receive_proc(int8_t id)
             //当按下OK键，且LCD模式为选择通道界面
             gs_lcd_mode = LCD_MODE_CAL; //进入设定值模式
             gs_lcd_cal_index = 0;
+            gs_para_y_div[gs_lcd_cal_index] = value_base_amp[gs_lcd_cal_ch];
+            tts_printf("请校准参数%d", gs_lcd_cal_index);
             break;
         case LCD_MODE_CAL:
             //设定值模式
             if(gs_lcd_cal_ch == CHANNEL_OUT_LOAD)
-                gs_para_x_div[gs_lcd_cal_index] = gs_base_amp_avg_20[CHANNEL_OUT]; //VOUT_LOAD
+                gs_para_x_div[gs_lcd_cal_index] = gs_base_amp_avg[CHANNEL_OUT]; //VOUT_LOAD
             else
-                gs_para_x_div[gs_lcd_cal_index] = gs_base_amp_avg_20[gs_lcd_cal_ch];
+                gs_para_x_div[gs_lcd_cal_index] = gs_base_amp_avg[gs_lcd_cal_ch];
             gs_lcd_cal_index++;
             if(gs_lcd_cal_index >= PARA_NUM) {
                 //计算回归曲线
@@ -710,18 +746,27 @@ void key_inout_receive_proc(int8_t id)
                 }
                 printf("\r\n");
                 
-                param_value_reset(gs_para_x_div, gs_para_y_div[gs_lcd_cal_ch], gs_lcd_cal_ch);
+                param_value_reset(gs_para_x_div, gs_para_y_div, gs_lcd_cal_ch, gs_lcd_cal_index);
                 
                 //进入参数确认界面
                 gs_lcd_cal_index = 0;
                 gs_lcd_mode = LCD_MODE_CAL_OK;
+                break;
             }
+            gs_para_y_div[gs_lcd_cal_index] = value_base_amp[gs_lcd_cal_ch];
+            tts_printf("请校准参数%d", gs_lcd_cal_index);
             break;
         case LCD_MODE_CAL_OK:
             //参数确认界面
             //写入内部FLASH
-            param_value_save();
-            gs_lcd_mode = LCD_MODE_CHANNEL;
+            switch(gs_lcd_mode) {
+                case LCD_MODE_CAL_OK:
+                    param_value_save();
+                    tts_printf("保存");
+                    gs_lcd_mode = LCD_MODE_CHANNEL;
+                default:
+                    ;
+            }
             break;
         default:
             break;
@@ -731,7 +776,18 @@ void key_inout_receive_proc(int8_t id)
         switch(gs_lcd_mode) {
         case LCD_MODE_CHANNEL:
             //B++;
-            gs_para[gs_lcd_cal_ch].b += 0.05;
+            if(gs_lcd_cal_ch == 0 || gs_lcd_cal_ch == 1) {
+                gs_para[gs_lcd_cal_ch].b += 0.05;
+            } else {
+                gs_para[gs_lcd_cal_ch].b += 1;
+            }
+            break;
+        case LCD_MODE_CAL:
+            if(gs_lcd_cal_ch == 0 || gs_lcd_cal_ch == 1) {
+                gs_para_y_div[gs_lcd_cal_index] += 0.05;
+            } else {
+                gs_para_y_div[gs_lcd_cal_index] += 1;
+            }
             break;
         default:
             break;
@@ -741,7 +797,42 @@ void key_inout_receive_proc(int8_t id)
         switch(gs_lcd_mode) {
         case LCD_MODE_CHANNEL:
             //B--;
-            gs_para[gs_lcd_cal_ch].b -= 0.05;
+            if(gs_lcd_cal_ch == 0 || gs_lcd_cal_ch == 1) {
+                gs_para[gs_lcd_cal_ch].b -= 0.05;
+            } else {
+                gs_para[gs_lcd_cal_ch].b -= 1;
+            }
+            break;
+        case LCD_MODE_CAL:
+            if(gs_lcd_cal_ch == 0 || gs_lcd_cal_ch == 1) {
+                gs_para_y_div[gs_lcd_cal_index] -= 0.05;
+            } else {
+                gs_para_y_div[gs_lcd_cal_index] -= 1;
+            }
+            break;
+        default:
+            break;
+        }
+        break;
+    case KEY_MODE_SAVE:
+        switch(gs_lcd_mode) {
+        case LCD_MODE_CHANNEL:
+            //B--;
+            param_value_save();
+            tts_printf("保存");
+            break;
+        case LCD_MODE_CAL:
+            //计算回归曲线
+            
+            for(int i=0; i<gs_lcd_cal_index; i++) {
+                printf("%.3f, ", gs_para_x_div[i]);
+            }
+            printf("\r\n");
+            param_value_reset(gs_para_x_div, gs_para_y_div, gs_lcd_cal_ch, gs_lcd_cal_index);
+            
+            //进入参数确认界面
+            gs_lcd_cal_index = 0;
+            gs_lcd_mode = LCD_MODE_CAL_OK;
             break;
         default:
             break;
@@ -751,12 +842,13 @@ void key_inout_receive_proc(int8_t id)
         if(freq_scan_status == FS_STOP) {
             freq_scan_status = FS_START;
             wave_on = 1;
+            tts_printf("伏频特性扫描模式");
             soft_timer_create(SOFT_TIMER_FREQSCAN_ID, 1, 0, freq_scan_proc, 10);
         }
         break;
     case KEY_MODE_RESET_1K:
         wave_on = 0;
-        tts_printf("欢迎使用电路特性测试仪");
+        tts_printf("当前输出频率1千赫兹");
         setWave(SINE, 1000);
         break;
     case KEY_MODE_OR:
@@ -768,6 +860,7 @@ void key_inout_receive_proc(int8_t id)
             if(or_status == 0) {
                 setWave(SINE, 1000);
                 APP_DEBUG(RED_FONT, "please add load resistor\r\n");
+                tts_printf("请接通负载电阻");
                 or_status = 1;
                 rout = 0;
             } else if(or_status == 1){
@@ -775,6 +868,7 @@ void key_inout_receive_proc(int8_t id)
                 
                 or_uf = value_base_amp[CHANNEL_OUT_LOAD];
                 APP_WARN("Uf voltage = %.4fV\r\n", or_uf);
+                tts_printf("请断开负载电阻");
                 or_status = 2;
                 rout = 0;
             } else {
@@ -783,14 +877,22 @@ void key_inout_receive_proc(int8_t id)
                 APP_WARN("Uo voltage = %.4fV\r\n", or_uo);
                 rout = 2000.0*(or_uo - or_uf)/or_uf;
                 APP_WARN("RO = %.0f\r\n", rout);
-                tts_printf("输出电阻%d欧", (int)rout);
+                if(rout > 1000.0f) {
+                    tts_printf("输出电阻%.2f千欧", (rout/1000));
+                } else {
+                    tts_printf("输出电阻%d欧", (int)rout);
+                }
                 or_status = 0;
             }
         }
         break;
     case KEY_MODE_IR:
         wave_on = 0;
-        tts_printf("输入电阻%d欧", (int)rin);
+        if(rin > 1000.0f) {
+            tts_printf("输入电阻%.2f千欧", (rin/1000));
+        } else {
+            tts_printf("输入电阻%d欧", (int)rin);
+        }
         break;
     case KEY_MODE_GAIN:
         tts_printf("当前增益%.1f", outgain);
@@ -805,19 +907,9 @@ void key_inout_receive_proc(int8_t id)
             //开启终端
         }
         break;
-    case KEY_MODE_SAVE_KEY:
-        switch(gs_lcd_mode) {
-        case LCD_MODE_CHANNEL:
-            param_value_save();
-            break;
-        default:
-            break;
-        }
-         
-        break;
     case KEY_MODE_QUARE:
         setWave(SQUARE, dds_output_freq);
-         break;
+        break;
     }
 }
 
@@ -862,7 +954,6 @@ void user_setup(void)
 void user_loop(void)
 {
     
-    
     TIMER_TASK(timer2, 100, wave_on) {
         gui_wave_draw(gwavs, 3);
 
@@ -871,31 +962,39 @@ void user_loop(void)
         ug_printf(0, 14, C_ORANGE, "GAIN %.1f", outgain_fast);
 //        ug_printf(0, 128 - 20, C_LIGHT_CYAN, "T'D 300ms");
         
-        UG_FillFrame(0, 128, 240-1, 240-1, C_GRAY);
         UG_SetBackcolor(C_GRAY);
+        UG_FillFrame(0, 120, 240-1, 240-1, C_GRAY);
         
         UG_FontSelect ( &FONT_6X10 );
+        uint8_t local = 0;
+        uint8_t show_height = 0;
+        uint8_t show_width = 0;
         for(int i=0; i<240; i++) {
-            if(i%30 == 0) {
-                if(i==0)
-                    continue;
+            if(i%30 == 0 || i == 239) {
+                if(i==0) {
+                    show_width = i;
+                } else if(i==239) {
+                    show_width = 240 - 30;
+                } else {
+                    show_width = i - 10;
+                }
                 float showfreq = log10(F_START_FREQ) + i*(log10(F_END_FREQ) - log10(F_START_FREQ))/F_COUNTER;
                 showfreq = pow(10, showfreq);
+                show_height = local?130:(120);
                 if(showfreq >= 1000) {
-                    ug_printf(i-10, 128, C_LIGHT_CYAN, "%.0fk", showfreq/1000);
+                    ug_printf(show_width, show_height, C_LIGHT_CYAN, "%.0fk", showfreq/1000);
                 } else {
-                    ug_printf(i-10, 128, C_LIGHT_CYAN, "%.0f", showfreq);
+                    ug_printf(show_width, show_height, C_LIGHT_CYAN, "%.0f", showfreq);
                 }
-                
+                local = !local;
             }
         }
-        UG_FontSelect ( &FONT_8X14 );
-        
         
         UG_FontSelect ( &FONT_12X20 );
-        ug_printf(0, 128 + 30, C_GREEN, "Fup %.0f KHz", up_freq/1000.0);
-        ug_printf(0, 128 + 50, C_GREEN, "Aup %.1f", gain_1k);
-  
+        ug_printf(0, 120 + 30, C_GREEN, "Fup %d KHz", (int)(up_freq/1000.0));
+        ug_printf(0, 120 + 50, C_GREEN, "Flp %d Hz", (int)(lp_freq));
+        ug_printf(0, 120 + 70, C_GREEN, "Aup %d", (int)gain_1k);
+        
         UG_FontSelect ( &FONT_8X14 );
         UG_SetBackcolor(C_BLACK);
     }

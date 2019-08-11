@@ -125,7 +125,7 @@ void param_default_value_init(void);
 * Output         : None.
 * Return         : None.
 *******************************************************************************/
-void param_value_reset(float *x, float *y, int channel);
+void param_value_reset(float *x, float *y, int channel, uint8_t count);
 
 /*******************************************************************************
 * Function Name  : param_value_save.
@@ -191,8 +191,8 @@ float pid_ctrl(pidc_t *pid, float curval);
 * Output         : None.
 * Return         : None.
 *******************************************************************************/
-uint16_t No_Max_Min_Filter(uint16_t *in_dat, uint16_t num, uint8_t channel_num, uint8_t type);
-
+uint16_t no_max_min_filter_uint16_mult(uint16_t *in_dat, uint16_t num, uint8_t channel_num, uint8_t type);
+float no_max_min_filter_float(float *in_dat, uint16_t num);
 
 
 #endif
