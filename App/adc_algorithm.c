@@ -92,6 +92,14 @@ void param_default_value_init(void)
     
     if(eeprom_read(0, (uint8_t *)&gs_para, sizeof(gs_para))) {
         printf("eeprom_read ok\r\n");
+        uint8_t *para_u8 = ( uint8_t *)&gs_para;
+        for(int i=0; i<sizeof(gs_para); i++) {
+            if(i%8 == 0)
+                printf("\r\n");
+            printf("0x%02x, ", para_u8[i]);
+        }
+        printf("\r\n");
+        
         for(int i=0; i<PARA_CHANNEL_NUMBER; i++) {
             printf("ch %d k: %.3f, b: %.3f\r\n", i, gs_para[i].k, gs_para[i].b);
         }

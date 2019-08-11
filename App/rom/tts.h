@@ -10,7 +10,7 @@
 #include <string.h>
 #include "data_interface_hal.h"
 
-#define   USE_TTS   (0)
+#define   USE_TTS   (1)
 
 
 #if USE_TTS

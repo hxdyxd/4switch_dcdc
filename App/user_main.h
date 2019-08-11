@@ -29,6 +29,8 @@
 
 
 /*1*/
+#define KEY_MODE_QUARE           (0)
+#define KEY_MODE_GAIN           (1)
 #define KEY_MODE_FREQ_SCAN      (2)
 #define KEY_MODE_RESET_1K       (3)
 

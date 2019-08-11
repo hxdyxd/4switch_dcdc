@@ -40,7 +40,7 @@ uint8_t mode_run = 0;
 
 
 uint8_t dds_output_amp = 100;
-float dds_output_freq = 1e3;
+int dds_output_freq = 1000;
 
 
 
@@ -128,7 +128,7 @@ void adc3_receive_proc(int id, int channel, void *pbuf, int len)
         }
         
         
-        if(gs_base_amp_avg_20_cnt >= 20) {
+        if(gs_base_amp_avg_20_cnt >= 10) {
             gs_base_amp_avg_20_cnt = 0;
             for(int i=0; i<ADC1_CHANNEL_NUMBER; i++) {
                 gs_base_amp_avg_20[i] = gs_base_amp_sum_20[i]/20.0;
@@ -202,8 +202,8 @@ void adc3_receive_proc(int id, int channel, void *pbuf, int len)
 }
 
 
-#define F_START_FREQ (500)
-#define F_END_FREQ   (250000)
+#define F_START_FREQ (200)
+#define F_END_FREQ   ((int)ADC1_FREQ_SAMP)
 #define F_COUNTER    (240)
 
 
@@ -246,24 +246,29 @@ void freq_scan_proc(void)
         //cur_freq_set = F_START_FREQ;
         //real_freq = cur_freq_set;
         setWave(SINE, real_freq);
-        soft_timer_create(SOFT_TIMER_FREQSCAN_ID, 1, 0, freq_scan_proc, 60);
+        soft_timer_create(SOFT_TIMER_FREQSCAN_ID, 1, 0, freq_scan_proc, 300);
         APP_DEBUG("start freq scan, cur_freq_set = %dHz\r\n", real_freq);
         lcd_printf("[%d] freq = %dHz\n", freq_point, real_freq);
         freq_scan_status = FS_NOT_DETECT;
         break;
     case FS_NOT_DETECT:
         //扫频中
+        gui_wave_set(&gwav2, EASY_LR(0, F_END_FREQ, 0, gs_base_freq_hz[CHANNEL_IN2], 120.0), C_BLUE);
+        gui_wave_set(&gwav3, EASY_LR(outgain_fast, 0, 0, 300, 120.0), C_ORANGE);
+        
         freq_point++;
         if(freq_point >= F_COUNTER || cur_freq_set >= log10(F_END_FREQ)) {
             //扫频结束
             APP_DEBUG("[%d] success freq scan, %d\r\n", freq_point, real_freq);
             lcd_printf("[%d] scan success, %d\n", freq_point, real_freq);
             freq_scan_status = FS_STOP;
+            setWave(SINE, 1000);
             return;
         }
         
         if(outgain_fast <= gain_1k && real_freq > 10000) {
             up_freq_find = 1;
+            tts_printf("上限频率%d", (int)up_freq);
         }
         if(!up_freq_find) {
             up_freq = real_freq;
@@ -273,7 +278,7 @@ void freq_scan_proc(void)
         //cur_freq_set += (F_END_FREQ - F_START_FREQ)*1.0/F_COUNTER;
         //real_freq = cur_freq_set;
         setWave(SINE, real_freq);
-        soft_timer_create(SOFT_TIMER_FREQSCAN_ID, 1, 0, freq_scan_proc, 60);
+        soft_timer_create(SOFT_TIMER_FREQSCAN_ID, 1, 0, freq_scan_proc, 50);
         APP_DEBUG("[%d] run freq scan, cur_freq_set = %dHz, GAIN = %.1f\r\n", freq_point, real_freq, outgain_fast);
         lcd_printf("[%d] freq = %dHz\n", freq_point, real_freq);
         break;
@@ -281,9 +286,7 @@ void freq_scan_proc(void)
         APP_DEBUG("default ?\r\n");
         break;
     }
-    gui_wave_set(&gwav1, EASY_LR(real_freq, 0, 0, F_END_FREQ, 120.0), C_MAGENTA);
-    gui_wave_set(&gwav2, EASY_LR(gs_base_freq_hz[CHANNEL_IN2], F_END_FREQ, 0, 0, 120.0), C_BLUE);
-    gui_wave_set(&gwav3, EASY_LR(outgain_fast, 0, 0, 300, 120.0), C_ORANGE);
+    //gui_wave_set(&gwav1, EASY_LR(real_freq, 0, 0, F_END_FREQ, 120.0), C_MAGENTA);
 }
 
 
@@ -333,64 +336,184 @@ const char *fault_string[15] = {
     "C3 Increase",
 };
 
+const char *fault_tts_string[15] = {
+    "1",
+    
+    "电阻1开路",
+    "电阻1短路",
+    "电阻2开路",
+    "电阻2短路",
+    
+    "电阻3开路",
+    "电阻3短路",
+    "电阻4开路",
+    "电阻4短路",
+    
+    "电容1开路",
+    "电容2开路",
+    "电容3开路",
+    
+    "电容1增大",
+    "电容2增大",
+    "电容3增大",
+};
+
+
+static uint8_t fault_id_temp_last = 0;
+static uint8_t fault_id_temp = 0;
 
 static uint8_t fault_id = 0;
+
+static uint8_t fault_static_point = 0;
 static uint8_t fault_detection_status = FD_START;
+
+static float mp_gain = 0;
 static float up_gain = 0;
+static float lp_gain = 0;
+//
+static uint8_t up_fault_counter = 0;
+static uint8_t up2_fault_counter = 0;
+static uint8_t lp_fault_counter = 0;
 static float rin_1k = 0;
 
-void fault_detection(void)
+static int fault_temp_val[] = {
+    0, //gs_vout_dc
+    0, //rin
+    0, //up_gain
+    0, //lp_gain
+};
+
+
+void fault_detection_static(void)
 {
-    switch(fault_detection_status) {
-    case FD_START:
-        setWave(SINE, 1000);
-        fault_detection_status = FD_RIN;
-        break;
-    case FD_RIN:
-        rin_1k = rin;
-        if(gs_vout_dc >= 9000) {
-            if(rin >= 7500) {
-                fault_id = R1_OC;
-            } else if(rin >= 4000) {
-                fault_id = R4_OC;
-            } else if(rin >= 1000) {
-                fault_id = R3_SC;
-            } else {
-                if(gs_vout_dc < 11000) {
-                    fault_id = R1_SC;
-                } else {
-                    fault_id = R2_SC;
-                }
-            }
-        } else if(gs_vout_dc <= 5000 && gs_vout_dc >= 1000 && rin <= 600) {
-            fault_id = R2_OC;
-        } else if(gs_vout_dc <= 1000 && rin <= 600) {
-            fault_id = R3_OC;
-            //fault_id = R4_SC;
-        } else if(gs_vout_dc >= 5000 && gs_vout_dc <= 9000 && rin > 12000) {
-            fault_id = C1_OC;
-        } else if(gs_vout_dc >= 5000 && gs_vout_dc <= 9000 && rin >= 4000 && rin <= 8000) {
-            fault_id = C2_OC;
+    rin_1k = rin;
+    if(gs_vout_dc >= 9000) {
+        if(rin >= 9000) {
+            fault_id_temp = R1_OC;
+        } else if(rin >= 4000) {
+            fault_id_temp = R4_OC;
+        } else if(rin >= 1000) {
+            fault_id_temp = R3_SC;
         } else {
-            fault_id = 0;
+            if(gs_vout_dc < 11000) {
+                fault_id_temp = R1_SC;
+            } else {
+                fault_id_temp = R2_SC;
+            }
         }
+    } else if(gs_vout_dc <= 5000 && gs_vout_dc >= 1000 && rin <= 600) {
+        fault_id_temp = R2_OC;
+    } else if(gs_vout_dc <= 1000 && rin <= 600) {
+        fault_id_temp = R3_OC;
+        //fault_id = R4_SC;
+    } else if(gs_vout_dc >= 5000 && gs_vout_dc <= 9000 && rin > 12000) {
+        fault_id_temp = C1_OC;
+    } else if(gs_vout_dc >= 5000 && gs_vout_dc <= 9000 && rin >= 4000 && rin <= 8000) {
+        fault_id_temp = C2_OC;
+    } else {
+        fault_id_temp = 0;
+    }
+    if(fault_id_temp == fault_id_temp_last) {
+        fault_id = fault_id_temp;
         
-        fault_detection_status = FD_START;
-        break;
-    case FD_UP_START:
-        setWave(SINE, 180);
-        fault_detection_status = FD_UP;
-        break;
-    case FD_UP:
-        up_gain = outgain_fast;
-        if(up_gain > 120) {
-            fault_id = C2_SC;
-        }
-        fault_detection_status = FD_START;
-        break;
+    }
+    fault_id_temp_last = fault_id_temp;
+    if(fault_id == 0) {
+        fault_static_point = 0;
+    } else {
+        fault_static_point = 1;
     }
 }
 
+
+void fault_detection(void)
+{
+    SWITCH_TASK_INIT(sfault);
+    
+    
+    SWITCH_TASK(sfault) {
+        APP_DEBUG("freq = %.1f, gain %.1f\r\n", gs_base_freq_hz[2], outgain);
+        mp_gain = outgain;
+        fault_detection_static();
+        if(!fault_static_point) {
+            setWave(SINE, 160000);
+        }
+        
+    }
+    
+
+    SWITCH_TASK(sfault) {
+        
+        if(!fault_static_point) {
+            APP_DEBUG("freq = %.1f, gain %.1f\r\n", gs_base_freq_hz[2], outgain);
+            up_gain = outgain;
+            
+            //HF
+            if(up_gain > 50) {
+                
+                up_fault_counter++;
+                if(up_fault_counter >= 2) {
+                    up_fault_counter = 0;
+                    fault_id = C3_OC;
+                }
+            } else if(up_gain < 30) {
+                up_fault_counter++;
+                
+                if(up_fault_counter >= 2) {
+                    fault_id = C3_SC;
+                }
+            }
+        }
+        
+        
+        setWave(SINE, 1000);
+    }
+
+    
+    #if 1
+    SWITCH_TASK(sfault) {
+        APP_DEBUG("freq = %.1f, gain %.1f\r\n", gs_base_freq_hz[2], outgain);
+        mp_gain = outgain;
+        fault_detection_static();
+        if(!fault_static_point) {
+            setWave(SINE, 200);
+        }
+        
+    }
+    
+    
+    SWITCH_TASK(sfault) {
+        
+        if(!fault_static_point) {
+            APP_DEBUG("freq = %.1f, gain %.1f\r\n", gs_base_freq_hz[2], outgain);
+            lp_gain = outgain;
+            
+            //LF
+            
+            if(lp_gain > 120) {
+                
+                lp_fault_counter++;
+                
+                if(lp_fault_counter >= 2) {
+                    lp_fault_counter = 0;
+                    fault_id = C2_SC;
+                }
+            }
+            
+        }
+        
+        setWave(SINE, 1000);
+    }
+    #endif
+    
+    
+    SWITCH_TASK_END(sfault);
+    
+    
+    if(fault_id != 0) {
+        tts_printf("%s", fault_tts_string[fault_id]);
+    }
+}
 
 
 
@@ -430,7 +553,13 @@ void led_debug_proc(void)
         lcd_printf("ENCODER_CNT = %d \r\n", encoder_cnt);
         float point = encoder_cnt * 0.25f;
         /* --> */
-        dds_output_freq += point*400;
+        if(dds_output_freq >= 10000) {
+             dds_output_freq += (int)point*1000;
+        } else if(dds_output_freq >= 1000) {
+            dds_output_freq += (int)point*100;
+        } else {
+            dds_output_freq += (int)point*10;
+        }
         if(dds_output_freq < 0.0) {
             dds_output_freq = 0;
         }
@@ -439,14 +568,14 @@ void led_debug_proc(void)
         }
         
         setWave(SINE, dds_output_freq);
-        lcd_printf("SET DDS FREQ = %.1f\n", dds_output_freq);
+        lcd_printf("SET DDS FREQ = %d\n", dds_output_freq);
     }
     /***********************************************/
     
     
     TIMER_TASK(timer0, 500, (lcd_console_enable && !wave_on)) {
         lcd_printf("ZERO = %.1f\n", ADC_12BIT_VOLTAGE_GET(gs_zero_val[0]) );
-        lcd_printf("DDS F %.1f, A %d\n", dds_output_freq, dds_output_amp);
+        lcd_printf("DDS F %d, A %d\n", dds_output_freq, dds_output_amp);
         TIMER_TASK(timer0, 1000, 1) {
             static uint32_t last_timer = 0;
             APP_DEBUG("fps: %d\r\n", fps_inc*1000/(hal_read_TickCounter() - last_timer) );
@@ -474,34 +603,55 @@ void led_debug_proc(void)
                 ug_printf(0, 0 + 14 + 20, C_YELLOW, "Ro: %d !manual", (int)rout);
             }
             ug_printf(0, 0 + 14 + 40, C_YELLOW, "GAIN: %d", (int)outgain);
+            ug_printf(0, 0 + 14 + 60, C_YELLOW, "FREQ: %d", dds_output_freq);
+            ug_printf(0, 0 + 14 + 80, C_BLUE, "IN1: %duV", (int)(value_base_amp[CHANNEL_IN1]*1000));
+            ug_printf(0, 0 + 14 + 100, C_BLUE, "IN2: %duV", (int)(value_base_amp[CHANNEL_IN2]*1000));
+            ug_printf(0, 0 + 14 + 120, C_BLUE, "OUT: %dmV", (int)value_base_amp[CHANNEL_OUT]);
+            ug_printf(0, 0 + 14 + 140, C_BLUE, "OUTL: %dmV", (int)value_base_amp[CHANNEL_OUT_LOAD]);
             break;
         case LCD_MODE_FAULT:
             ug_printf(0, 0 + 14, C_GREEN, "Fault detection");
             ug_printf(0, 0 + 14 + 20, C_RED, "[%d]", fault_id);
             ug_printf(0, 0 + 14 + 40, C_RED, "%s", fault_string[fault_id]);
-            ug_printf(0, 0 + 14 + 60, C_ORANGE, "RI: %d", (int)rin_1k);
-            ug_printf(0, 0 + 14 + 80, C_ORANGE, "VODC: %dmV", gs_vout_dc);
-            ug_printf(0, 0 + 14 + 100, C_ORANGE, "UpGain: %d", (int)up_gain);
-//            ug_printf(0, 0 + 14 + 120, C_ORANGE, "UIN2: %d", (int)value_base_amp[CHANNEL_IN2]);
+            ug_printf(0, 0 + 14 + 60, C_BLUE, "RI: %d", (int)rin_1k);
+            ug_printf(0, 0 + 14 + 80, C_BLUE, "VODC: %dmV", gs_vout_dc);
+            ug_printf(0, 0 + 14 + 100, C_BLUE, "UpGain: %d", (int)up_gain);
+            ug_printf(0, 0 + 14 + 120, C_BLUE, "MpGain: %d", (int)mp_gain);
+            ug_printf(0, 0 + 14 + 140, C_BLUE, "LpGain: %d", (int)lp_gain);
+            ug_printf(0, 0 + 14 + 160, C_BLUE, "IN2: %duV", (int)(value_base_amp[CHANNEL_IN2]*1000));
             
             break;
         /*cal mode*/
         case LCD_MODE_CHANNEL:
             ug_printf(0, 0 + 14, C_ORANGE, "Cal mode");
             ug_printf(0, 0 + 14 + 20, C_ORANGE, "Ch select, CH%d", gs_lcd_cal_ch);
-            ug_printf(0, 0 + 14 + 40, C_ORANGE, "AMP:%.2gmV", value_base_amp[gs_lcd_cal_ch]);
+            if(gs_lcd_cal_ch == 0 || gs_lcd_cal_ch == 1) {
+                ug_printf(0, 0 + 14 + 40, C_ORANGE, "AMP:%duV", (int)(value_base_amp[gs_lcd_cal_ch]*1000));
+            } else {
+                ug_printf(0, 0 + 14 + 40, C_ORANGE, "AMP:%dmV", (int)value_base_amp[gs_lcd_cal_ch]);
+            }
             break;
         case LCD_MODE_CAL:
             ug_printf(0, 0 + 14, C_ORANGE, "Cal mode, CH%d", gs_lcd_cal_ch);
             ug_printf(0, 0 + 14 + 20, C_ORANGE, "[%d]set %.1fmV", gs_lcd_cal_index, gs_para_y_div[gs_lcd_cal_ch][gs_lcd_cal_index]);
-            ug_printf(0, 0 + 14 + 40, C_ORANGE, "ADC AMP:%6.1fmV", gs_base_amp_avg_20[gs_lcd_cal_ch]*1000);
-            //ug_printf(0, 128 + 14 + 60, C_ORANGE, "REAL AMP:%6.1fmV", value_base_amp[gs_lcd_cal_ch]);
+            ug_printf(0, 0 + 14 + 40, C_ORANGE, "ADC AMP:%.1fmV", gs_base_amp_avg_20[gs_lcd_cal_ch]*1000);
+        
+            if(gs_lcd_cal_ch == 0 || gs_lcd_cal_ch == 1) {
+                ug_printf(0, 0 + 14 + 60, C_ORANGE, "AMP:%duV", (int)(value_base_amp[gs_lcd_cal_ch]*1000));
+            } else {
+                ug_printf(0, 0 + 14 + 60, C_ORANGE, "AMP:%dmV", (int)value_base_amp[gs_lcd_cal_ch]);
+            }
             break;
         case LCD_MODE_CAL_OK:
             ug_printf(0, 0 + 14, C_ORANGE, "Cal mode, CH%d", gs_lcd_cal_ch);
             ug_printf(0, 0 + 14 + 20, C_GREEN, "OK SAVE?");
-            ug_printf(0, 0 + 14 + 40, C_GREEN, "ADC AMP:%6.1fmV", gs_base_amp_avg_20[gs_lcd_cal_ch]*1000);
-            //ug_printf(0, 128 + 14 + 60, C_GREEN, "REAL AMP:%6.1fmV", value_base_amp[gs_lcd_cal_ch]);
+            ug_printf(0, 0 + 14 + 40, C_GREEN, "ADC AMP:%.1fmV", gs_base_amp_avg_20[gs_lcd_cal_ch]*1000);
+
+            if(gs_lcd_cal_ch == 0 || gs_lcd_cal_ch == 1) {
+                ug_printf(0, 0 + 14 + 60, C_ORANGE, "AMP:%duV", (int)(value_base_amp[gs_lcd_cal_ch]*1000));
+            } else {
+                ug_printf(0, 0 + 14 + 60, C_ORANGE, "AMP:%dmV", (int)value_base_amp[gs_lcd_cal_ch]);
+            }
             break;
         /*cal mode end*/
         default:
@@ -517,7 +667,7 @@ void key_inout_receive_proc(int8_t id)
 {
     APP_DEBUG("KEY = %d \r\n", id);
     lcd_printf("KEY = %d \r\n", id);
-    
+    wave_on = 0;
     switch(id) {
     case KEY_MODE_SWITCH_PAGE:
         gs_lcd_mode++;
@@ -642,6 +792,9 @@ void key_inout_receive_proc(int8_t id)
         wave_on = 0;
         tts_printf("输入电阻%d欧", (int)rin);
         break;
+    case KEY_MODE_GAIN:
+        tts_printf("当前增益%.1f", outgain);
+        break;
     case KEY_MODE_CONSOLE:
         //切换终端
         if(lcd_console_enable) {
@@ -662,6 +815,9 @@ void key_inout_receive_proc(int8_t id)
         }
          
         break;
+    case KEY_MODE_QUARE:
+        setWave(SQUARE, dds_output_freq);
+         break;
     }
 }
 
@@ -705,26 +861,14 @@ void user_setup(void)
 
 void user_loop(void)
 {
-    /* key scan task */
-    TIMER_TASK(time0, 5, 1) {
-        key_inout_proc(key_inout_receive_proc);
-    }
     
-    /* lcd flush */
-    TIMER_TASK(time1, 33, 1) {
-        if(lcd240x240_flush() >= 0) {
-            fps_inc++;
-        }
-        
-        tts_proc(); //TTS
-    }
     
     TIMER_TASK(timer2, 100, wave_on) {
         gui_wave_draw(gwavs, 3);
 
-        ug_printf(0, 0, C_MAGENTA, "FREQ %.1fkHz", real_freq/1000.0);
-        ug_printf(0, 14, C_BLUE, "FREQ %.1fkHz", gs_base_freq_hz[CHANNEL_IN2]/1000.0);
-        ug_printf(0, 28, C_ORANGE, "GAIN %.1f", outgain_fast);
+        //ug_printf(0, 0, C_MAGENTA, "FREQ %.1fkHz", real_freq/1000.0);
+        ug_printf(0, 0, C_BLUE, "FREQ %.1fkHz", gs_base_freq_hz[CHANNEL_IN2]/1000.0);
+        ug_printf(0, 14, C_ORANGE, "GAIN %.1f", outgain_fast);
 //        ug_printf(0, 128 - 20, C_LIGHT_CYAN, "T'D 300ms");
         
         UG_FillFrame(0, 128, 240-1, 240-1, C_GRAY);
@@ -733,12 +877,14 @@ void user_loop(void)
         UG_FontSelect ( &FONT_6X10 );
         for(int i=0; i<240; i++) {
             if(i%30 == 0) {
+                if(i==0)
+                    continue;
                 float showfreq = log10(F_START_FREQ) + i*(log10(F_END_FREQ) - log10(F_START_FREQ))/F_COUNTER;
                 showfreq = pow(10, showfreq);
                 if(showfreq >= 1000) {
-                    ug_printf(i, 128, C_LIGHT_CYAN, "%.0fk", showfreq/1000);
+                    ug_printf(i-10, 128, C_LIGHT_CYAN, "%.0fk", showfreq/1000);
                 } else {
-                    ug_printf(i, 128, C_LIGHT_CYAN, "%.0f", showfreq);
+                    ug_printf(i-10, 128, C_LIGHT_CYAN, "%.0f", showfreq);
                 }
                 
             }
@@ -754,10 +900,23 @@ void user_loop(void)
         UG_SetBackcolor(C_BLACK);
     }
     
+    /* lcd flush */
+    TIMER_TASK(time1, 33, 1) {
+        if(lcd240x240_flush() >= 0) {
+            fps_inc++;
+        }
+        
+        tts_proc(); //TTS
+    }
+    
     /* real time task */
     /* adc proc task */
     adc_rx_proc(adc3_receive_proc);
     
+     /* key scan task */
+    TIMER_TASK(time0, 5, 1) {
+        key_inout_proc(key_inout_receive_proc);
+    }
     /* soft timer */
     soft_timer_proc();
 }

@@ -13,6 +13,9 @@ extern uint8_t lcd_console_enable;
 #define lcd_printf(...)  do {\
 if(lcd_console_enable) {\
 int len = snprintf(lcd_console_buffer, sizeof(lcd_console_buffer), __VA_ARGS__);\
+if(len >20) {\
+    len = 20;\
+}\
 lcd_console_buffer[len] = '\0';\
 UG_ConsolePutString(lcd_console_buffer);\
 }\
