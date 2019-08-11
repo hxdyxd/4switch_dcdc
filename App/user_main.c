@@ -142,7 +142,12 @@ void adc3_receive_proc(int id, int channel, void *pbuf, int len)
                     value_base_amp[CHANNEL_OUT_LOAD] = get_param_value(gs_base_amp_avg_20[i], i+1);
                 }
                 rin = 2000*(value_base_amp[1])/(value_base_amp[0] - value_base_amp[1]);
-                outgain = value_base_amp[CHANNEL_OUT]/value_base_amp[CHANNEL_IN2];
+                
+                if(gs_base_freq_hz[1] > 50000.0) {
+                    outgain =  (1.0842 * value_base_amp[CHANNEL_OUT] -154.1335)/ ( 0.4243 *value_base_amp[CHANNEL_IN2] + 3.6967);
+                } else {
+                    outgain = value_base_amp[CHANNEL_OUT]/value_base_amp[CHANNEL_IN2];
+                }
             }
         } else {
             for(int i=0; i<ADC1_CHANNEL_NUMBER; i++) {
@@ -197,7 +202,7 @@ void adc3_receive_proc(int id, int channel, void *pbuf, int len)
 }
 
 
-#define F_START_FREQ (100)
+#define F_START_FREQ (500)
 #define F_END_FREQ   (250000)
 #define F_COUNTER    (240)
 
@@ -214,30 +219,34 @@ uint8_t freq_scan_status = FS_STOP;
 static float cur_freq_set = 0;
 static int freq_point = 0;
 static uint32_t real_freq = 0;
+static float up_freq = 0;
+static uint8_t up_freq_find = 0;
+static float gain_1k = 0;
 
 
 void freq_scan_proc(void)
 {
-    static float gain_1k = 0;
+   
     switch(freq_scan_status) {
     case FS_START:
         //记录初始增益
+        up_freq_find = 0;
         setWave(SINE, 1000);
         soft_timer_create(SOFT_TIMER_FREQSCAN_ID, 1, 0, freq_scan_proc, 400);
         freq_scan_status = FS_START_SCAN;
     case FS_START_SCAN:
         //使用精确增益
-        gain_1k = outgain / 1.41421;
+        gain_1k = outgain_fast / 1.41421;
         APP_DEBUG("start freq scan, set 1k, gain = %.1f\r\n", gain_1k);
         
         //开始扫频
         freq_point = 0;
-        //cur_freq_set = log10(F_START_FREQ);
-        //real_freq = pow(10, cur_freq_set);
-        cur_freq_set = F_START_FREQ;
-        real_freq = cur_freq_set;
+        cur_freq_set = log10(F_START_FREQ);
+        real_freq = pow(10, cur_freq_set);
+        //cur_freq_set = F_START_FREQ;
+        //real_freq = cur_freq_set;
         setWave(SINE, real_freq);
-        soft_timer_create(SOFT_TIMER_FREQSCAN_ID, 1, 0, freq_scan_proc, 80);
+        soft_timer_create(SOFT_TIMER_FREQSCAN_ID, 1, 0, freq_scan_proc, 60);
         APP_DEBUG("start freq scan, cur_freq_set = %dHz\r\n", real_freq);
         lcd_printf("[%d] freq = %dHz\n", freq_point, real_freq);
         freq_scan_status = FS_NOT_DETECT;
@@ -245,19 +254,26 @@ void freq_scan_proc(void)
     case FS_NOT_DETECT:
         //扫频中
         freq_point++;
-        if(freq_point >= F_COUNTER || cur_freq_set >= log10(F_END_FREQ) || (outgain_fast < gain_1k && real_freq > 1000)) {
+        if(freq_point >= F_COUNTER || cur_freq_set >= log10(F_END_FREQ)) {
             //扫频结束
             APP_DEBUG("[%d] success freq scan, %d\r\n", freq_point, real_freq);
             lcd_printf("[%d] scan success, %d\n", freq_point, real_freq);
             freq_scan_status = FS_STOP;
             return;
         }
-        //cur_freq_set += (log10(F_END_FREQ) - log10(F_START_FREQ))/F_COUNTER;
-        //real_freq = pow(10, cur_freq_set);
-        cur_freq_set += (F_END_FREQ - F_START_FREQ)*1.0/F_COUNTER;
-        real_freq = cur_freq_set;
+        
+        if(outgain_fast <= gain_1k && real_freq > 10000) {
+            up_freq_find = 1;
+        }
+        if(!up_freq_find) {
+            up_freq = real_freq;
+        }
+        cur_freq_set += (log10(F_END_FREQ) - log10(F_START_FREQ))/F_COUNTER;
+        real_freq = pow(10, cur_freq_set);
+        //cur_freq_set += (F_END_FREQ - F_START_FREQ)*1.0/F_COUNTER;
+        //real_freq = cur_freq_set;
         setWave(SINE, real_freq);
-        soft_timer_create(SOFT_TIMER_FREQSCAN_ID, 1, 0, freq_scan_proc, 80);
+        soft_timer_create(SOFT_TIMER_FREQSCAN_ID, 1, 0, freq_scan_proc, 60);
         APP_DEBUG("[%d] run freq scan, cur_freq_set = %dHz, GAIN = %.1f\r\n", freq_point, real_freq, outgain_fast);
         lcd_printf("[%d] freq = %dHz\n", freq_point, real_freq);
         break;
@@ -274,7 +290,8 @@ void freq_scan_proc(void)
 #define FD_NOT_RUN   (255)
 #define FD_START     (0)
 #define FD_RIN       (1)
-#define FD_VOUT      (2)
+#define FD_UP_START  (2)
+#define FD_UP        (3)
 
 
 #define R1_OC    (1)
@@ -319,6 +336,8 @@ const char *fault_string[15] = {
 
 static uint8_t fault_id = 0;
 static uint8_t fault_detection_status = FD_START;
+static float up_gain = 0;
+static float rin_1k = 0;
 
 void fault_detection(void)
 {
@@ -328,6 +347,7 @@ void fault_detection(void)
         fault_detection_status = FD_RIN;
         break;
     case FD_RIN:
+        rin_1k = rin;
         if(gs_vout_dc >= 9000) {
             if(rin >= 7500) {
                 fault_id = R1_OC;
@@ -336,8 +356,11 @@ void fault_detection(void)
             } else if(rin >= 1000) {
                 fault_id = R3_SC;
             } else {
-                fault_id = R1_SC;
-                //fault_id = R2_SC;
+                if(gs_vout_dc < 11000) {
+                    fault_id = R1_SC;
+                } else {
+                    fault_id = R2_SC;
+                }
             }
         } else if(gs_vout_dc <= 5000 && gs_vout_dc >= 1000 && rin <= 600) {
             fault_id = R2_OC;
@@ -352,13 +375,17 @@ void fault_detection(void)
             fault_id = 0;
         }
         
-        fault_detection_status = FD_VOUT;
+        fault_detection_status = FD_START;
         break;
-    case FD_VOUT:
-        printf("VOUT_DC: %d\r\n", gs_vout_dc);
-        lcd_printf("VOUT_DC: %d\n", gs_vout_dc);
-        
-        
+    case FD_UP_START:
+        setWave(SINE, 180);
+        fault_detection_status = FD_UP;
+        break;
+    case FD_UP:
+        up_gain = outgain_fast;
+        if(up_gain > 120) {
+            fault_id = C2_SC;
+        }
         fault_detection_status = FD_START;
         break;
     }
@@ -428,7 +455,7 @@ void led_debug_proc(void)
         }
     }
     
-    TIMER_TASK(timer1, 300, (!wave_on && LCD_MODE_FAULT == gs_lcd_mode)) {
+    TIMER_TASK(timer1, 500, (!wave_on && LCD_MODE_FAULT == gs_lcd_mode)) {
         fault_detection();
     }
     
@@ -452,8 +479,11 @@ void led_debug_proc(void)
             ug_printf(0, 0 + 14, C_GREEN, "Fault detection");
             ug_printf(0, 0 + 14 + 20, C_RED, "[%d]", fault_id);
             ug_printf(0, 0 + 14 + 40, C_RED, "%s", fault_string[fault_id]);
-            ug_printf(0, 0 + 14 + 60, C_ORANGE, "RI: %d", (int)rin);
+            ug_printf(0, 0 + 14 + 60, C_ORANGE, "RI: %d", (int)rin_1k);
             ug_printf(0, 0 + 14 + 80, C_ORANGE, "VODC: %dmV", gs_vout_dc);
+            ug_printf(0, 0 + 14 + 100, C_ORANGE, "UpGain: %d", (int)up_gain);
+//            ug_printf(0, 0 + 14 + 120, C_ORANGE, "UIN2: %d", (int)value_base_amp[CHANNEL_IN2]);
+            
             break;
         /*cal mode*/
         case LCD_MODE_CHANNEL:
@@ -694,24 +724,34 @@ void user_loop(void)
 
         ug_printf(0, 0, C_MAGENTA, "FREQ %.1fkHz", real_freq/1000.0);
         ug_printf(0, 14, C_BLUE, "FREQ %.1fkHz", gs_base_freq_hz[CHANNEL_IN2]/1000.0);
-        ug_printf(0, 28, C_ORANGE, "GAIN %.1f", outgain);
-        ug_printf(0, 128 - 20, C_LIGHT_CYAN, "T'D 300ms");
-        TIMER_TASK(timer2_1, 1000, 1) {
-            UG_FontSelect ( &FONT_6X10 );
-            for(int i=0; i<240; i++) {
-                if(i%30 == 0) {
-                    float showfreq = log10(F_START_FREQ) + i*(log10(F_END_FREQ) - log10(F_START_FREQ))/F_COUNTER;
-                    showfreq = pow(10, showfreq);
-                    if(showfreq >= 1000) {
-                        ug_printf(i, 128, C_LIGHT_CYAN, "%.0fk", showfreq/1000);
-                    } else {
-                        ug_printf(i, 128, C_LIGHT_CYAN, "%.0f", showfreq);
-                    }
-                    
+        ug_printf(0, 28, C_ORANGE, "GAIN %.1f", outgain_fast);
+//        ug_printf(0, 128 - 20, C_LIGHT_CYAN, "T'D 300ms");
+        
+        UG_FillFrame(0, 128, 240-1, 240-1, C_GRAY);
+        UG_SetBackcolor(C_GRAY);
+        
+        UG_FontSelect ( &FONT_6X10 );
+        for(int i=0; i<240; i++) {
+            if(i%30 == 0) {
+                float showfreq = log10(F_START_FREQ) + i*(log10(F_END_FREQ) - log10(F_START_FREQ))/F_COUNTER;
+                showfreq = pow(10, showfreq);
+                if(showfreq >= 1000) {
+                    ug_printf(i, 128, C_LIGHT_CYAN, "%.0fk", showfreq/1000);
+                } else {
+                    ug_printf(i, 128, C_LIGHT_CYAN, "%.0f", showfreq);
                 }
+                
             }
-            UG_FontSelect ( &FONT_8X14 );
         }
+        UG_FontSelect ( &FONT_8X14 );
+        
+        
+        UG_FontSelect ( &FONT_12X20 );
+        ug_printf(0, 128 + 30, C_GREEN, "Fup %.0f KHz", up_freq/1000.0);
+        ug_printf(0, 128 + 50, C_GREEN, "Aup %.1f", gain_1k);
+  
+        UG_FontSelect ( &FONT_8X14 );
+        UG_SetBackcolor(C_BLACK);
     }
     
     /* real time task */

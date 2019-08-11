@@ -338,7 +338,7 @@
               <MiscControls></MiscControls>
               <Define>USE_HAL_DRIVER,STM32H750xx,USE_FULL_ASSERT,__ARM_PCS_VFP,__FPU_PRESENT=1,ARM_MATH_CM7,ARM_MATH_MATRIX_CHECK</Define>
               <Undefine></Undefine>
-              <IncludePath>../Inc;        ../Drivers/STM32H7xx_HAL_Driver/Inc;        ../Drivers/STM32H7xx_HAL_Driver/Inc/Legacy;        ../Drivers/CMSIS/Device/ST/STM32H7xx/Include;        ../Drivers/CMSIS/Include;        ..\App;        ..\App\hal;        ..\App\hardware;        ..\App\rom;        ..\Drivers\CMSIS\DSP\Include;        ..\App\lcd;        ..\App\lcd\UGUI;        ../Utilities/JPEG;        ..\App\dds;        ..\App\flash</IncludePath>
+              <IncludePath>../Inc;         ../Drivers/STM32H7xx_HAL_Driver/Inc;         ../Drivers/STM32H7xx_HAL_Driver/Inc/Legacy;         ../Drivers/CMSIS/Device/ST/STM32H7xx/Include;         ../Drivers/CMSIS/Include;         ..\App;         ..\App\hal;         ..\App\hardware;         ..\App\rom;         ..\Drivers\CMSIS\DSP\Include;         ..\App\lcd;         ..\App\lcd\UGUI;         ../Utilities/JPEG;         ..\App\dds;         ..\App\flash</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
