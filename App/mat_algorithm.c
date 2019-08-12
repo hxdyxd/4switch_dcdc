@@ -16,27 +16,47 @@ void mat_put(char *str, int rows, int cols, float32_t *pData)
 }
 
 
-#define  MAT_ROWS   (3)
-#define  MAT_COLS   (2)
+#define  MAT_ROWS   (2)
+#define  MAT_COLS   (11)
 float32_t pDataA[MAT_ROWS*MAT_COLS] = {
-    1, -1, 
-    -1, 2, 
-    -2, 1, 
+//    "1",
+//    
+//    "电阻1开路",
+//    "电阻1短路",
+//    "电阻2开路",
+//    "电阻2短路",
+//    
+//    "电阻3开路",
+//    "电阻3短路",
+//    "电阻4开路",
+//    "电阻4短路",
+//    
+//    "电容1开路",
+//    "电容2开路",
+    2165, 14587, 0,    59,   0,        149,   2016,  10859,  46,      0,      10664,   //2158,      //RI
+    5028, 8168, 8271,  2476,  8106,    103,   1573,   8405,  30,      5024,    5047,   //5020,      //DC
+//    123,  123,  123 ,  123,    123,    123,   123,   123,    123,     123,      123,   123,       //UP
+//   81,   94,   94 ,    94,    94,     94,   94,      94,   94,       94,      94,     94,        //LP
 };
 
 float32_t pDatab[MAT_ROWS] = {
-    6,
-    9,
-    -1,
+    2165,
+    5028,
 };
+
+
 
 float32_t pDataA_temp1[MAT_ROWS*MAT_COLS];
 float32_t pDataA_temp2[MAT_ROWS*MAT_COLS];
 float32_t pDataA_temp3[MAT_ROWS*MAT_COLS];
 
 
-void mat(void)
+float *mat_convert(float *indata)
 {
+    for(int i=0; i<MAT_ROWS; i++) {
+        pDatab[i] = indata[i];
+    }
+    
     arm_matrix_instance_f32  mAt1;
     arm_matrix_instance_f32  mAt2;
     arm_matrix_instance_f32  mAt3;
@@ -52,7 +72,7 @@ void mat(void)
     
     if(arm_mat_trans_f32(&mAt3, &mAt1) != ARM_MATH_SUCCESS) {
         APP_ERROR("mat\r\n");
-        return;
+        return NULL;
     }
     mat_put("A'", mAt1.numRows, mAt1.numCols, pDataA_temp1);
     /*****************************************************************/
@@ -62,7 +82,7 @@ void mat(void)
     
     if(arm_mat_mult_f32(&mAt1, &mAt3, &mAt2) != ARM_MATH_SUCCESS) {
         APP_ERROR("mat\r\n");
-        return;
+        return NULL;
     }
     mat_put("A' * A", mAt2.numRows,  mAt2.numCols, pDataA_temp2);
     /*****************************************************************/
@@ -72,7 +92,7 @@ void mat(void)
     
     if(arm_mat_inverse_f32(&mAt2, &mAt3) != ARM_MATH_SUCCESS) {
         APP_ERROR("mat\r\n");
-        return;
+        return NULL;
     }
     mat_put("inv(A' * A)", mAt3.numRows, mAt3.numCols, pDataA_temp3);
     /*****************************************************************/
@@ -82,7 +102,7 @@ void mat(void)
     
     if(arm_mat_mult_f32(&mAt3, &mAt1, &mAt2) != ARM_MATH_SUCCESS) {
         APP_ERROR("mat\r\n");
-        return;
+        return NULL;
     }
     mat_put("inv(A' * A) * A'", mAt2.numRows, mAt2.numCols, pDataA_temp2);
     /*****************************************************************/
@@ -95,10 +115,10 @@ void mat(void)
     mAt1.pData = pDataA_temp1;
     if(arm_mat_mult_f32(&mAt2, &mAt3, &mAt1) != ARM_MATH_SUCCESS) {
         APP_ERROR("mat\r\n");
-        return;
+        return NULL;
     }
     mat_put("inv(A' * A) * A' * b",  mAt1.numRows, mAt1.numCols, pDataA_temp1);
     /*****************************************************************/
-    
+    return (float *)&pDataA_temp1;
 }
 

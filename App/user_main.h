@@ -59,6 +59,17 @@
 #define LCD_MODE_CAL_OK         (51)
 
 
+//LCD_MODE_FAULT
+#define LCD_MODE_FAULT_SHOW     (0)
+#define LCD_MODE_FAULT_RI       (1)
+#define LCD_MODE_FAULT_DCI      (2)
+#define LCD_MODE_FAULT_DCO      (3)
+#define LCD_MODE_FAULT_UP       (4)
+#define LCD_MODE_FAULT_LP       (5)
+#define LCD_MODE_FAULT_NUMBER   (LCD_MODE_FAULT_LP+1)
+
+
+
 #define SCREEN_BUFFER_MAX_SIZE          (20)
 
 

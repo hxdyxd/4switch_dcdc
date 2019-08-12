@@ -32,6 +32,35 @@ static struct lcd_wave_t *gwavs[3] = {
 };
 static uint8_t wave_on = 0;
 
+//40k - 160k
+static float freq_table_40k[ADC1_CHANNEL_NUMBER][2] = {
+    {1, 0, },
+     {0.4340 ,   5.1136},
+    { 1.2484 , -184.6287},
+};
+static float freq_table_160k[ADC1_CHANNEL_NUMBER][2] = {
+    {1, 0, },
+    { 0.0810,  4.9054,},
+    {  1.0e+03 * -0.0013 ,  1.0e+03 * 1.1748,}, 
+};
+
+
+float freq_gain_table_cal(float freq, float in, float out)
+{
+    float freq_in_base_amp = 0;
+    float freq_out_base_amp = 0;
+    if(freq > 160e3) {
+        freq_in_base_amp = freq_table_160k[CHANNEL_IN2][0] * in + freq_table_160k[CHANNEL_IN2][1];
+        freq_out_base_amp = freq_table_160k[CHANNEL_OUT][0] * out + freq_table_160k[CHANNEL_OUT][1];
+    } else if(freq > 15e3) {
+        freq_in_base_amp = freq_table_40k[CHANNEL_IN2][0] * in + freq_table_40k[CHANNEL_IN2][1];
+        freq_out_base_amp = freq_table_40k[CHANNEL_OUT][0] * out + freq_table_40k[CHANNEL_OUT][1];
+    } else {
+        freq_in_base_amp = in;
+        freq_out_base_amp = out;
+    }
+    return freq_out_base_amp/freq_in_base_amp;
+}
 
 
 
@@ -62,9 +91,13 @@ static float value_base_amp_fast[ADC1_CHANNEL_NUMBER] = {0};
 float rin = 0;
 float outgain = 0;
 float outgain_fast = 0;
+
+
+int gs_vin_dc = 0;
 int gs_vout_dc = 0;
 
 uint32_t fft_cnt = 0;
+uint32_t vdc_cnt = 0;
 
 void adc3_receive_proc(int id, int channel, void *pbuf, int len)
 {
@@ -115,10 +148,12 @@ void adc3_receive_proc(int id, int channel, void *pbuf, int len)
             value_base_amp_fast[i] = get_param_value(gs_base_amp[i], i);
         }
         
-        if(gs_base_freq_hz[1] > 35000.0) {
-            outgain_fast =  (1.0842 * value_base_amp_fast[CHANNEL_OUT] -154.1335)/ ( 0.4243 *value_base_amp_fast[CHANNEL_IN2] + 3.6967);
-        } else {
-            outgain_fast = value_base_amp_fast[CHANNEL_OUT]/value_base_amp_fast[CHANNEL_IN2];
+        
+        outgain_fast = freq_gain_table_cal(gs_base_freq_hz[1], value_base_amp_fast[CHANNEL_IN2], value_base_amp_fast[CHANNEL_OUT]);
+        if(UABS(gs_vin_dc - gs_vout_dc) < 500) {
+            float out_a = gs_base_amp[CHANNEL_OUT]*2.33/3.5;
+            float in_a = gs_base_amp[CHANNEL_IN2]*2.88/24.6;
+            outgain_fast = out_a/in_a;
         }
         
         
@@ -139,11 +174,15 @@ void adc3_receive_proc(int id, int channel, void *pbuf, int len)
                 
                 //get input resister
                 rin = 2000*(value_base_amp[1])/(value_base_amp[0] - value_base_amp[1]);
-                if(gs_base_freq_hz[1] > 35000.0) {
-                    outgain =  (1.0842 * value_base_amp[CHANNEL_OUT] -154.1335)/ ( 0.4243 *value_base_amp[CHANNEL_IN2] + 3.6967);
-                } else {
-                    outgain = value_base_amp[CHANNEL_OUT]/value_base_amp[CHANNEL_IN2];
+                
+                //fix freq
+                outgain = freq_gain_table_cal(gs_base_freq_hz[1], value_base_amp[CHANNEL_IN2], value_base_amp[CHANNEL_OUT]);
+                if(UABS(gs_vin_dc - gs_vout_dc) < 500) {
+                    float out_a = gs_base_amp_avg[CHANNEL_OUT]*2.33/3.5;
+                    float in_a = gs_base_amp_avg[CHANNEL_IN2]*2.88/24.6;
+                    outgain = out_a/in_a;
                 }
+                
             }
             gs_base_amp_avg_cnt = (gs_base_amp_avg_cnt + 1) % BASE_AMP_AVG_NUMBER;
         }
@@ -151,7 +190,17 @@ void adc3_receive_proc(int id, int channel, void *pbuf, int len)
     }
     
     if(id == 3) {
-        gs_vout_dc = no_max_min_filter_uint16_mult(adc_data, ADC3_CONV_NUMBER, ADC3_CHANNEL_NUMBER, 0);
+        vdc_cnt++;
+        static int vdc_cnt_last = 0;
+        gs_vin_dc = no_max_min_filter_uint16_mult(adc_data, ADC3_CONV_NUMBER, ADC3_CHANNEL_NUMBER, 0);
+        gs_vin_dc = ADC_16BIT_VOLTAGE_GET(gs_vin_dc)*1000*4.3;
+        
+        
+        
+        printf("gs_vin_dc: %d  inc: %d\r\n", gs_vin_dc, gs_vin_dc - vdc_cnt_last);
+        vdc_cnt_last = gs_vin_dc;
+        
+        gs_vout_dc = no_max_min_filter_uint16_mult(adc_data, ADC3_CONV_NUMBER, ADC3_CHANNEL_NUMBER, 1);
         gs_vout_dc = ADC_16BIT_VOLTAGE_GET(gs_vout_dc)*1000*4.3;
     }
 }
@@ -180,6 +229,7 @@ static uint8_t up_freq_find = 0;
 static uint8_t lp_freq_find = 0;
 static float gain_1k = 0;
 
+static float outgain_fast_last = 0;
 
 void freq_scan_proc(void)
 {
@@ -216,9 +266,16 @@ void freq_scan_proc(void)
         break;
     case FS_NOT_DETECT:
         //扫频中
-    gui_wave_set(&gwav1, EASY_LR( ((up_freq_find == 0)&&(lp_freq_find == 1))?(gain_1k):(0), 0, 0, 300, 120.0), C_GREEN);
+    {
+        float scan_gain = outgain_fast;
+        if(fabs(scan_gain - outgain_fast_last) > 5) {
+            scan_gain = outgain_fast_last + ((scan_gain - outgain_fast_last > 0)?5:-5);
+        }
+        
+        outgain_fast_last = scan_gain;
+        gui_wave_set(&gwav1, EASY_LR( ((up_freq_find == 0)&&(lp_freq_find == 1))?(gain_1k):(0), 0, 0, 300, 120.0), C_GREEN);
         gui_wave_set(&gwav2, EASY_LR(gs_base_freq_hz[CHANNEL_IN2], F_START_FREQ, 0, F_END_FREQ, 120.0), C_BLUE);
-        gui_wave_set(&gwav3, EASY_LR(outgain_fast, 0, 0, 300, 120.0), C_ORANGE);
+        gui_wave_set(&gwav3, EASY_LR(scan_gain, 0, 0, 300, 120.0), C_ORANGE);
         
         freq_point++;
         if(freq_point >= F_COUNTER || cur_freq_set >= log10(F_END_FREQ)) {
@@ -230,10 +287,10 @@ void freq_scan_proc(void)
             return;
         }
         
-        if(outgain_fast <= gain_1k && real_freq > 10000) {
+        if(scan_gain <= gain_1k && real_freq > 10000) {
             up_freq_find = 1;
             tts_printf("上限频率%.1f千赫兹", (up_freq/1000));
-        } else if(outgain_fast >= gain_1k) {
+        } else if(scan_gain >= gain_1k) {
             lp_freq_find = 1;
         }
         if(!up_freq_find) {
@@ -248,9 +305,10 @@ void freq_scan_proc(void)
         //real_freq = cur_freq_set;
         setWave(SINE, real_freq);
         soft_timer_create(SOFT_TIMER_FREQSCAN_ID, 1, 0, freq_scan_proc, 50);
-        APP_DEBUG("[%d] run freq scan, cur_freq_set = %dHz, GAIN = %.1f\r\n", freq_point, real_freq, outgain_fast);
+        APP_DEBUG("[%d] run freq scan, cur_freq_set = %dHz, GAIN = %.1f\r\n", freq_point, real_freq, scan_gain);
         lcd_printf("[%d] freq = %dHz\n", freq_point, real_freq);
         break;
+    }
     default:
         APP_DEBUG("default ?\r\n");
         break;
@@ -343,9 +401,13 @@ static uint8_t up_fault_counter = 0;
 static uint8_t lp_fault_counter = 0;
 static float rin_1k = 0;
 
-static int fault_temp_val[] = {
-    0, //gs_vout_dc
-    0, //rin
+static int vidc_last = 0;
+static int vidc_max = 0;
+static int vidc_inc = 0;
+
+static int fault_vout_para_val[] = {
+    7000, //gs_vout_dc
+    3600, //rin
     0, //up_gain
     0, //lp_gain
 };
@@ -354,7 +416,7 @@ static int fault_temp_val[] = {
 void fault_detection_static(void)
 {
     rin_1k = rin;
-    if(gs_vout_dc >= 9000) {
+    if(gs_vout_dc >= 7000) {
         if(rin >= 12000) {
             fault_id_temp = R1_OC;
         } else if(rin >= 4000) {
@@ -362,30 +424,31 @@ void fault_detection_static(void)
         } else if(rin >= 1000) {
             fault_id_temp = R3_SC;
         } else {
-            if(gs_vout_dc < 11000) {
+            if(gs_vout_dc > 8300) {
                 fault_id_temp = R1_SC;
             } else {
                 fault_id_temp = R2_SC;
             }
         }
-    } else if(gs_vout_dc <= 5000 && gs_vout_dc >= 1000 && rin <= 600 && rin > 0) {
+    } else if(gs_vout_dc <= 3600 && gs_vout_dc >= 1000 && rin <= 600 && rin > 0) {
         fault_id_temp = R2_OC;
-    } else if(gs_vout_dc <= 1000 && rin <= 600 && rin > 0) {
+    } else if(gs_vout_dc <= 500 && rin <= 600 && rin > 0) {
         if( rin > 140) {
             fault_id_temp = R3_OC;
         } else {
             fault_id_temp = R4_SC;
         }
-    } else if(gs_vout_dc >= 5000 && gs_vout_dc <= 9000 && (rin > 12000 || rin < 0)) {
+    } else if(gs_vout_dc >= 3000 && gs_vout_dc <= 7000 && (rin > 12000 || rin < 0)) {
         fault_id_temp = C1_OC;
-    } else if(gs_vout_dc >= 5000 && gs_vout_dc <= 9000 && rin >= 4000 && rin <= 12000) {
+    } else if(gs_vout_dc >= 3000 && gs_vout_dc <= 7000 && rin >= 4000 && rin <= 12000) {
         fault_id_temp = C2_OC;
     } else {
         fault_id_temp = 0;
     }
+    
+    
     if(fault_id_temp == fault_id_temp_last) {
         fault_id = fault_id_temp;
-        
     }
     fault_id_temp_last = fault_id_temp;
     if(fault_id == 0) {
@@ -393,6 +456,13 @@ void fault_detection_static(void)
     } else {
         fault_static_point = 1;
     }
+    
+    vidc_inc = gs_vin_dc - vidc_last;
+    if(vidc_inc > 300  && vidc_inc < 1200 && vidc_last > 500 && !fault_static_point && !fault_id_temp) {
+        vidc_max = gs_vin_dc;
+        fault_id = C1_SC;
+    }
+    vidc_last = gs_vin_dc;
 }
 
 
@@ -405,8 +475,8 @@ void fault_detection(void)
         APP_DEBUG("freq = %.1f, gain %.1f\r\n", gs_base_freq_hz[2], outgain);
         mp_gain = outgain;
         fault_detection_static();
-        if(!fault_static_point) {
-            setWave(SINE, 160000);
+        if(!fault_static_point && gs_vout_dc >= 3600 && gs_vout_dc <= 7000) {
+            setWave(SINE, 140000);
         }
         
     }
@@ -414,22 +484,22 @@ void fault_detection(void)
 
     SWITCH_TASK(sfault) {
         
-        if(!fault_static_point) {
+        if(!fault_static_point && gs_vout_dc >= 3600 && gs_vout_dc <= 7000) {
             APP_DEBUG("freq = %.1f, gain %.1f\r\n", gs_base_freq_hz[2], outgain);
             up_gain = outgain;
             
             //HF
-            if(up_gain > 115) {
+            if(up_gain > 130) {
                 
                 up_fault_counter++;
-                if(up_fault_counter >= 2 && gs_vout_dc >= 5000 && gs_vout_dc <= 9000) {
+                if(up_fault_counter >= 2) {
                     up_fault_counter = 0;
                     fault_id = C3_OC;
                 }
-            } else if(up_gain < 75) {
+            } else if(up_gain < 95) {
                 up_fault_counter++;
                 
-                if(up_fault_counter >= 2 && gs_vout_dc >= 5000 && gs_vout_dc <= 9000) {
+                if(up_fault_counter >= 2) {
                     up_fault_counter = 0;
                     fault_id = C3_SC;
                 }
@@ -448,7 +518,7 @@ void fault_detection(void)
         APP_DEBUG("freq = %.1f, gain %.1f\r\n", gs_base_freq_hz[2], outgain);
         mp_gain = outgain;
         fault_detection_static();
-        if(!fault_static_point) {
+        if(!fault_static_point && gs_vout_dc >= 3600 && gs_vout_dc <= 7000) {
             setWave(SINE, 210);
         }
         
@@ -457,7 +527,7 @@ void fault_detection(void)
     
     SWITCH_TASK(sfault) {
         
-        if(!fault_static_point) {
+        if(!fault_static_point && gs_vout_dc >= 3600 && gs_vout_dc <= 7000) {
             APP_DEBUG("freq = %.1f, gain %.1f\r\n", gs_base_freq_hz[2], outgain);
             lp_gain = outgain;
             
@@ -501,6 +571,7 @@ static float rout = 0;
 
 /***********/
 uint8_t gs_lcd_mode = LCD_MODE_DEFAULT0;
+uint8_t gs_lcd_mode_fault = LCD_MODE_FAULT_SHOW;
 
 /**cal**/
 uint8_t gs_lcd_cal_index = 0;
@@ -569,6 +640,8 @@ void led_debug_proc(void)
         
         static uint32_t last_timer = 0;
         APP_DEBUG("FFT CNT: %d\r\n", fft_cnt*1000/(hal_read_TickCounter() - last_timer) );
+        APP_DEBUG("VDC CNT: %d\r\n", vdc_cnt*1000/(hal_read_TickCounter() - last_timer) );
+        vdc_cnt = 0;
         fft_cnt = 0;
         last_timer = hal_read_TickCounter();
     }
@@ -602,23 +675,47 @@ void led_debug_proc(void)
             } else {
                 ug_printf(0, 0 + 14 + 20, C_YELLOW, "Ro: %d !manual", (int)rout);
             }
-            ug_printf(0, 0 + 14 + 40, C_YELLOW, "GAIN: %d", (int)outgain);
+            ug_printf(0, 0 + 14 + 40, C_YELLOW, "GAIN: %d.%02d", (int)outgain, (int)(outgain*100)%100);
             ug_printf(0, 0 + 14 + 60, C_YELLOW, "FREQ: %d", dds_output_freq);
             ug_printf(0, 0 + 14 + 80, C_BLUE, "IN1: %duV", (int)(value_base_amp[CHANNEL_IN1]*1000));
             ug_printf(0, 0 + 14 + 100, C_BLUE, "IN2: %duV", (int)(value_base_amp[CHANNEL_IN2]*1000));
             ug_printf(0, 0 + 14 + 120, C_BLUE, "OUT: %dmV", (int)value_base_amp[CHANNEL_OUT]);
             ug_printf(0, 0 + 14 + 140, C_BLUE, "OUTL: %dmV", (int)value_base_amp[CHANNEL_OUT_LOAD]);
+            ug_printf(0, 0 + 14 + 160, C_BLUE, "VIDC: %dmV", gs_vin_dc);
+            ug_printf(0, 0 + 14 + 180, C_BLUE, "VODC: %dmV", gs_vout_dc);
+            
             break;
         case LCD_MODE_FAULT:
             ug_printf(0, 0 + 14, C_GREEN, "Fault detection");
             ug_printf(0, 0 + 14 + 20, C_RED, "[%d]", fault_id);
             ug_printf(0, 0 + 14 + 40, C_RED, "%s", fault_string[fault_id]);
-            ug_printf(0, 0 + 14 + 60, C_BLUE, "RI: %d", (int)rin_1k);
-            ug_printf(0, 0 + 14 + 80, C_BLUE, "VODC: %dmV", gs_vout_dc);
-            ug_printf(0, 0 + 14 + 100, C_BLUE, "UpGain: %d", (int)up_gain);
-            ug_printf(0, 0 + 14 + 120, C_BLUE, "MpGain: %d", (int)mp_gain);
-            ug_printf(0, 0 + 14 + 140, C_BLUE, "LpGain: %d", (int)lp_gain);
-            ug_printf(0, 0 + 14 + 160, C_BLUE, "IN2: %duV", (int)(value_base_amp[CHANNEL_IN2]*1000));
+            switch(gs_lcd_mode_fault) {
+            case LCD_MODE_FAULT_SHOW:
+                ug_printf(0, 0 + 14 + 80, C_BLUE, "RI: %d", (int)rin_1k);
+                ug_printf(0, 0 + 14 + 100, C_BLUE, "VIDC: %dmV(%d)", gs_vin_dc, vidc_inc);
+                ug_printf(0, 0 + 14 + 120, C_BLUE, "VODC: %dmV", gs_vout_dc);
+                
+                ug_printf(0, 0 + 14 + 140, C_BLUE, "UpGain: %d", (int)up_gain);
+                ug_printf(0, 0 + 14 + 160, C_BLUE, "MpGain: %d", (int)mp_gain);
+                ug_printf(0, 0 + 14 + 180, C_BLUE, "LpGain: %d", (int)lp_gain);
+                ug_printf(0, 0 + 14 + 200, C_BLUE, "IN2: %duV", (int)(value_base_amp[CHANNEL_IN2]*1000));
+                break;
+            case LCD_MODE_FAULT_RI:
+                ug_printf(0, 0 + 14 + 80, C_BLUE, "RI: %d", (int)rin_1k);
+                break;
+            case LCD_MODE_FAULT_DCI:
+                ug_printf(0, 0 + 14 + 80, C_BLUE, "VIDC: %dmV(%d)", gs_vin_dc, vidc_inc);
+                break;
+            case LCD_MODE_FAULT_DCO:
+                ug_printf(0, 0 + 14 + 80, C_BLUE, "VODC: %dmV", gs_vout_dc);
+                break;
+            case LCD_MODE_FAULT_UP:
+                ug_printf(0, 0 + 14 + 80, C_BLUE, "UpGain: %d", (int)up_gain);
+                break;
+            case LCD_MODE_FAULT_LP:
+                ug_printf(0, 0 + 14 + 80, C_BLUE, "LpGain: %d", (int)lp_gain);
+                break;
+            }
             
             break;
         /*cal mode*/
@@ -677,6 +774,14 @@ void led_debug_proc(void)
     }
 }
 
+char *mode_fault_string[LCD_MODE_FAULT_NUMBER] = {
+    [LCD_MODE_FAULT_SHOW] = "分析模式",
+    [LCD_MODE_FAULT_RI]   = "输入电阻模式",
+    [LCD_MODE_FAULT_DCI]  = "输入电压模式",
+    [LCD_MODE_FAULT_DCO]  = "输出电压模式",
+    [LCD_MODE_FAULT_UP]  = "电容3增益模式",
+    [LCD_MODE_FAULT_LP]  = "电容2增益模式",
+};
 
 char *mode_string[LCD_MODE_NUMBER] = {
     [0] = "测量模式",
@@ -708,6 +813,12 @@ void key_inout_receive_proc(int8_t id)
         break;
     case KEY_MODE_ADD:
         switch(gs_lcd_mode) {
+        case LCD_MODE_FAULT:
+            gs_lcd_mode_fault++;
+            if(gs_lcd_mode_fault >= LCD_MODE_FAULT_NUMBER) {
+                gs_lcd_mode_fault = 0;
+            }
+            tts_printf("%s", mode_fault_string[gs_lcd_mode_fault]);
         case LCD_MODE_CHANNEL:
             //选择下一个通道
             gs_lcd_cal_ch++;
@@ -846,6 +957,8 @@ void key_inout_receive_proc(int8_t id)
             wave_on = 1;
             tts_printf("伏频特性扫描模式");
             soft_timer_create(SOFT_TIMER_FREQSCAN_ID, 1, 0, freq_scan_proc, 10);
+        } else {
+            gain_1k = 100;
         }
         break;
     case KEY_MODE_RESET_1K:
@@ -897,7 +1010,7 @@ void key_inout_receive_proc(int8_t id)
         }
         break;
     case KEY_MODE_GAIN:
-        tts_printf("当前增益%.1f", outgain);
+        tts_printf("当前增益%.2f", outgain);
         break;
     case KEY_MODE_CONSOLE:
         //切换终端

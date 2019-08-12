@@ -80,7 +80,7 @@ typedef struct {
 
 //Linear regression
 #define  EASY_LR(x,x1,y1,x2,y2)                (((y2) - (y1))/((x2) - (x1))*((x) - (x1)) + (y1))
-
+#define  UABS(a)  (((a)>=0)?(a):(-(a)))
 
 /*******************************************************************************
 * Function Name  : polyfit1.
@@ -194,6 +194,8 @@ float pid_ctrl(pidc_t *pid, float curval);
 uint16_t no_max_min_filter_uint16_mult(uint16_t *in_dat, uint16_t num, uint8_t channel_num, uint8_t type);
 float no_max_min_filter_float(float *in_dat, uint16_t num);
 
+
+uint16_t peak_uint16_mult(uint16_t *in_dat, uint16_t num, uint8_t channel_num, uint8_t n);
 
 #endif
 /*****************************END OF FILE***************************/

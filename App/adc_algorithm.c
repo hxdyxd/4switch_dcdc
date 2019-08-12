@@ -279,6 +279,29 @@ uint16_t no_max_min_filter_uint16_mult(uint16_t *in_dat, uint16_t num, uint8_t c
     return (uint16_t)sum_f;
 }
 
+/*
+ * 
+*/
+uint16_t peak_uint16_mult(uint16_t *in_dat, uint16_t num, uint8_t channel_num, uint8_t n)
+{
+    int i;
+    uint16_t max_value, min_value;
+    max_value = in_dat[n];
+    min_value = in_dat[n];
+
+    for(i=n; i<num*channel_num; i+=channel_num){
+        if(in_dat[i] > max_value){
+            max_value = in_dat[i];
+        }
+        if(in_dat[i] < min_value){
+            min_value = in_dat[i];
+        }
+    }
+    
+    return (max_value + min_value)/2;
+}
+
+
 
 /*
  * ADC去极值平均滤波器
