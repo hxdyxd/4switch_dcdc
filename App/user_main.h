@@ -64,9 +64,8 @@
 #define LCD_MODE_FAULT_RI       (1)
 #define LCD_MODE_FAULT_DCI      (2)
 #define LCD_MODE_FAULT_DCO      (3)
-#define LCD_MODE_FAULT_UP       (4)
-#define LCD_MODE_FAULT_LP       (5)
-#define LCD_MODE_FAULT_NUMBER   (LCD_MODE_FAULT_LP+1)
+#define LCD_MODE_FAULT_UPLP     (4)
+#define LCD_MODE_FAULT_NUMBER   (LCD_MODE_FAULT_UPLP+1)
 
 
 
