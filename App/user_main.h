@@ -48,7 +48,7 @@
 
 /*4*/
 #define KEY_MODE_CONSOLE        (12)
-
+#define KEY_MODE_DEBUG          (13)
 
 #define LCD_MODE_DEFAULT0       (0)
 #define LCD_MODE_FAULT          (1)

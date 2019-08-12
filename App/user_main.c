@@ -265,7 +265,10 @@ void freq_scan_proc(void)
             scan_gain = outgain_fast_last + ((scan_gain - outgain_fast_last > 0)?5:-5);
         }
         if(real_freq > 160) {
-            scan_gain -= 3;
+            if(!up_freq_find && up_freq > 130)
+                scan_gain -= 1;
+            else
+                scan_gain -= 6;
         }
         
         outgain_fast_last = scan_gain;
@@ -417,6 +420,21 @@ static int fault_vout_para_val[VOUT_DIV_NUM] = {
 #define  R3OR4S_H                                     (4)
 #define  C1C2OC_L                                     (5)
 
+
+#define VIN_DIV_NUM   (3)
+static int fault_vin_para_val[VIN_DIV_NUM] = {
+    300, //
+    1200, //
+    500, //
+};
+
+#define  C1SCINC_L      (0)
+#define  C1SCINC_H      (1)
+#define  C1SCINC_BL     (2)
+
+
+
+
 #define RI_DIV_NUM   (4)
 static int fault_ri_para_val[RI_DIV_NUM] = {
     12000, //R1OC_L
@@ -479,7 +497,10 @@ void fault_detection_static(void)
     }
     
     vidc_inc = gs_vin_dc - vidc_last;
-    if(vidc_inc > 300  && vidc_inc < 1200 && vidc_last > 500 && !fault_static_point && !fault_id_temp) {
+    if(vidc_inc > fault_vin_para_val[C1SCINC_L]  
+        && vidc_inc < fault_vin_para_val[C1SCINC_H] 
+        && vidc_last > fault_vin_para_val[C1SCINC_BL] 
+        && !fault_static_point && !fault_id_temp) {
         fault_id = C1_SC;
     }
     vidc_last = gs_vin_dc;
@@ -618,6 +639,7 @@ static float rout = 0;
 
 
 /***********/
+uint8_t gs_debug_on = 0;
 uint8_t gs_lcd_mode = LCD_MODE_DEFAULT0;
 uint8_t gs_lcd_mode_fault = LCD_MODE_FAULT_SHOW;
 uint8_t gs_lcd_mode_fault_sel = 0;
@@ -668,7 +690,12 @@ void led_debug_proc(void)
                 break;
             }
             case LCD_MODE_FAULT_DCI:
+            {
+                if(gs_lcd_mode_fault_sel < VIN_DIV_NUM) {
+                    fault_vin_para_val[gs_lcd_mode_fault_sel] += point*5;
+                }
                 break;
+            }
             case LCD_MODE_FAULT_DCO:
             {
                 if(gs_lcd_mode_fault_sel < VOUT_DIV_NUM) {
@@ -761,12 +788,14 @@ void led_debug_proc(void)
             }
             ug_printf(0, 0 + 14 + 40, C_YELLOW, "GAIN: %d.%02d", (int)outgain, (int)(outgain*100)%100);
             ug_printf(0, 0 + 14 + 60, C_YELLOW, "FREQ: %d", dds_output_freq);
-            ug_printf(0, 0 + 14 + 80, C_BLUE, "IN1: %duV", (int)(value_base_amp[CHANNEL_IN1]*1000));
-            ug_printf(0, 0 + 14 + 100, C_BLUE, "IN2: %duV", (int)(value_base_amp[CHANNEL_IN2]*1000));
-            ug_printf(0, 0 + 14 + 120, C_BLUE, "OUT: %dmV", (int)value_base_amp[CHANNEL_OUT]);
-            ug_printf(0, 0 + 14 + 140, C_BLUE, "OUTL: %dmV", (int)value_base_amp[CHANNEL_OUT_LOAD]);
-            ug_printf(0, 0 + 14 + 160, C_BLUE, "VIDC: %dmV", gs_vin_dc);
-            ug_printf(0, 0 + 14 + 180, C_BLUE, "VODC: %dmV", gs_vout_dc);
+            if(gs_debug_on) {
+                ug_printf(0, 0 + 14 + 80, C_BLUE, "IN1: %duV", (int)(value_base_amp[CHANNEL_IN1]*1000));
+                ug_printf(0, 0 + 14 + 100, C_BLUE, "IN2: %duV", (int)(value_base_amp[CHANNEL_IN2]*1000));
+                ug_printf(0, 0 + 14 + 120, C_BLUE, "OUT: %dmV", (int)value_base_amp[CHANNEL_OUT]);
+                ug_printf(0, 0 + 14 + 140, C_BLUE, "OUTL: %dmV", (int)value_base_amp[CHANNEL_OUT_LOAD]);
+                ug_printf(0, 0 + 14 + 160, C_BLUE, "VIDC: %dmV", gs_vin_dc);
+                ug_printf(0, 0 + 14 + 180, C_BLUE, "VODC: %dmV", gs_vout_dc);
+            }
             
             break;
         case LCD_MODE_FAULT:
@@ -775,14 +804,16 @@ void led_debug_proc(void)
             ug_printf(0, 0 + 14 + 40, C_RED, "%s", fault_string[fault_id]);
             switch(gs_lcd_mode_fault) {
             case LCD_MODE_FAULT_SHOW:
-                ug_printf(0, 0 + 14 + 80, C_BLUE, "RI: %d", (int)rin_1k);
-                ug_printf(0, 0 + 14 + 100, C_BLUE, "VIDC: %dmV(%d)", gs_vin_dc, vidc_inc);
-                ug_printf(0, 0 + 14 + 120, C_BLUE, "VODC: %dmV", gs_vout_dc);
-                
-                ug_printf(0, 0 + 14 + 140, C_BLUE, "UpGain: %d", (int)up_gain);
-                ug_printf(0, 0 + 14 + 160, C_BLUE, "MpGain: %d", (int)mp_gain);
-                ug_printf(0, 0 + 14 + 180, C_BLUE, "LpGain: %d", (int)lp_gain);
-                ug_printf(0, 0 + 14 + 200, C_BLUE, "IN2: %duV", (int)(value_base_amp[CHANNEL_IN2]*1000));
+                if(gs_debug_on) {
+                    ug_printf(0, 0 + 14 + 80, C_BLUE, "RI: %d", (int)rin_1k);
+                    ug_printf(0, 0 + 14 + 100, C_BLUE, "VIDC: %dmV(%d)", gs_vin_dc, vidc_inc);
+                    ug_printf(0, 0 + 14 + 120, C_BLUE, "VODC: %dmV", gs_vout_dc);
+                    
+                    ug_printf(0, 0 + 14 + 140, C_BLUE, "UpGain: %d", (int)up_gain);
+                    ug_printf(0, 0 + 14 + 160, C_BLUE, "MpGain: %d", (int)mp_gain);
+                    ug_printf(0, 0 + 14 + 180, C_BLUE, "LpGain: %d", (int)lp_gain);
+                    ug_printf(0, 0 + 14 + 200, C_BLUE, "IN2: %duV", (int)(value_base_amp[CHANNEL_IN2]*1000));
+                }
                 break;
             case LCD_MODE_FAULT_RI:
             {
@@ -796,6 +827,11 @@ void led_debug_proc(void)
             }
             case LCD_MODE_FAULT_DCI:
                 ug_printf(0, 0 + 14 + 80, C_BLUE, "VIDC: %dmV(%d)", gs_vin_dc, vidc_inc);
+                uint16_t local = 100;
+                for(int i=0; i<VIN_DIV_NUM; i++) {
+                    ug_printf(0, 0 + 14 + local, (gs_lcd_mode_fault_sel==i)?C_RED:C_BLUE, "PARA%d: %d", i, fault_vin_para_val[i]);
+                    local+=20;
+                }
                 break;
             case LCD_MODE_FAULT_DCO:
             {
@@ -955,7 +991,13 @@ void key_inout_receive_proc(int8_t id)
                 break;
             }
             case LCD_MODE_FAULT_DCI:
+            {
+                gs_lcd_mode_fault_sel++;
+                if(gs_lcd_mode_fault_sel >= VIN_DIV_NUM) {
+                    gs_lcd_mode_fault_sel = 0;
+                }
                 break;
+            }
             case LCD_MODE_FAULT_DCO:
             {
                 gs_lcd_mode_fault_sel++;
@@ -1037,7 +1079,12 @@ void key_inout_receive_proc(int8_t id)
                 break;
             }
             case LCD_MODE_FAULT_DCI:
+            {
+                if(gs_lcd_mode_fault_sel < VIN_DIV_NUM) {
+                    fault_vin_para_val[gs_lcd_mode_fault_sel] += 5;
+                }
                 break;
+            }
             case LCD_MODE_FAULT_DCO:
             {
                 if(gs_lcd_mode_fault_sel < VOUT_DIV_NUM) {
@@ -1088,7 +1135,12 @@ void key_inout_receive_proc(int8_t id)
                 break;
             }
             case LCD_MODE_FAULT_DCI:
+            {
+                if(gs_lcd_mode_fault_sel < VIN_DIV_NUM) {
+                    fault_vin_para_val[gs_lcd_mode_fault_sel] -= 5;
+                }
                 break;
+            }
             case LCD_MODE_FAULT_DCO:
             {
                 if(gs_lcd_mode_fault_sel < VOUT_DIV_NUM) {
@@ -1222,6 +1274,9 @@ void key_inout_receive_proc(int8_t id)
         break;
     case KEY_MODE_QUARE:
         setWave(SQUARE, dds_output_freq);
+        break;
+    case KEY_MODE_DEBUG:
+        gs_debug_on = !gs_debug_on;
         break;
     }
 }
