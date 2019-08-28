@@ -182,6 +182,11 @@ uint32_t find_fft_max_freq_index(float *buf, uint32_t size)
     return max;
 }
 
+
+//ref:
+//https://www.mathworks.com/help/signal/ref/flattopwin.html
+//https://en.wikipedia.org/wiki/Window_function
+
 static float flat_val[FFT_LENGTH];
 
 void fft_hann_init(void)

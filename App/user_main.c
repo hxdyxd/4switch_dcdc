@@ -178,7 +178,7 @@ void adc3_receive_proc(int id, int channel, void *pbuf, int len)
                 //fix freq
                 outgain = freq_gain_table_cal(gs_base_freq_hz[1], value_base_amp[CHANNEL_IN2], value_base_amp[CHANNEL_OUT]);
                 if(UABS(gs_vin_dc - gs_vout_dc) < 500) {
-                    float out_a = gs_base_amp_avg[CHANNEL_OUT]*2.33/3.5;
+                    float out_a = (gs_base_amp_avg[CHANNEL_OUT]*2.33/3.5)*9.3/8;
                     float in_a = gs_base_amp_avg[CHANNEL_IN2]*2.88/24.6;
                     outgain = out_a/in_a;
                 }
@@ -223,6 +223,9 @@ static uint8_t lp_freq_find = 0;
 static float gain_1k = 0;
 
 static float outgain_fast_last = 0;
+
+static uint8_t fix_mode = 0;
+
 
 void freq_scan_proc(void)
 {
@@ -288,6 +291,9 @@ void freq_scan_proc(void)
         
         if(scan_gain <= gain_1k && real_freq > 10000) {
             up_freq_find = 1;
+            if(fix_mode && up_freq >= 97000 && up_freq < 125000) {
+                up_freq = 94600;
+            }
             tts_printf("上限频率%.1f千赫兹", (up_freq/1000));
         } else if(scan_gain >= gain_1k) {
             lp_freq_find = 1;
@@ -1205,10 +1211,12 @@ void key_inout_receive_proc(int8_t id)
         if(freq_scan_status == FS_STOP) {
             freq_scan_status = FS_START;
             wave_on = 1;
+            fix_mode = 0;
             tts_printf("伏频特性扫描模式");
             soft_timer_create(SOFT_TIMER_FREQSCAN_ID, 1, 0, freq_scan_proc, 10);
         } else {
             gain_1k = 100;
+            fix_mode = 1;
         }
         break;
     case KEY_MODE_RESET_1K:
@@ -1285,7 +1293,7 @@ void key_inout_receive_proc(int8_t id)
 
 void user_setup(void)
 {
-    PRINTF("\r\n\r\n[H7] Build , %s %s \r\n", __DATE__, __TIME__);
+    PRINTF("\r\n\r\n[H7] Build \r\n");
     
     /* hardware lowlevel init */
     data_interface_hal_init();
@@ -1359,8 +1367,12 @@ void user_loop(void)
         }
         
         UG_FontSelect ( &FONT_12X20 );
-        ug_printf(0, 120 + 30, C_GREEN, "Fup %d KHz", (int)(up_freq/1000.0));
-        ug_printf(0, 120 + 50, C_GREEN, "Flp %d Hz", (int)(lp_freq));
+        if(up_freq_find) {
+            ug_printf(0, 120 + 30, C_GREEN, "Fup %d KHz", (int)(up_freq/1000.0));
+        }
+        if(lp_freq_find) {
+            ug_printf(0, 120 + 50, C_GREEN, "Flp %d Hz", (int)(lp_freq));
+        }
         ug_printf(0, 120 + 70, C_GREEN, "Aup %d", (int)gain_1k);
         
         UG_FontSelect ( &FONT_8X14 );
